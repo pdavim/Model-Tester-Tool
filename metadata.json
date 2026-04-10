@@ -1,0 +1,5 @@
+{
+  "name": "OpenRouter Model Tester",
+  "description": "A user-friendly interface to test OpenRouter models with customizable parameters, token usage tracking, and response time display.",
+  "requestFramePermissions": []
+}
