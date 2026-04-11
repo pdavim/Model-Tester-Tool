@@ -12,6 +12,11 @@ async function startServer() {
   const PORT = 3767;
 
   app.use(express.json());
+  
+  // Health check endpoint for Docker/Dokploy
+  app.get("/health", (req, res) => {
+    res.status(200).json({ status: "healthy", timestamp: new Date().toISOString() });
+  });
 
   // API Route for OpenRouter Proxy
   app.post("/api/chat", async (req, res) => {
