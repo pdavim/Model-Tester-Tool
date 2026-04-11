@@ -592,8 +592,8 @@ export default function App() {
             frequency_penalty: frequencyPenalty,
             presence_penalty: presencePenalty,
             stream: stream,
-            openRouterKey: isCustom ? undefined : openRouterKey,
-            hfApiKey: isCustom ? hfApiKey : undefined
+            openRouterKey: isHF ? undefined : openRouterKey,
+            hfApiKey: isHF ? hfApiKey : undefined
           }),
         });
 

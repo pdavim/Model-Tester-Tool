@@ -12,10 +12,11 @@ services:
       - APP_URL=${APP_URL}
     restart: always
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3767/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3767/health', (r) => { if (r.statusCode === 200) process.exit(0); else process.exit(1); }).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     logging:
       driver: "json-file"
       options:
