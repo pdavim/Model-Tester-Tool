@@ -26,7 +26,7 @@ View your app in AI Studio: https://ai.studio/apps/64565575-35e3-4e42-b1d8-78652
 1. Build the image:
    `docker build -t model-tester -f dockerfile.txt .`
 2. Run the container:
-   `docker run -p 3000:3000 --env-file .env model-tester`
+   `docker run -p 3001:3000 --env-file .env model-tester`
 
 ### Deploying to Dokploy
 
