@@ -67,6 +67,11 @@ async function startServer() {
     }
   });
 
+  // Cache for Hugging Face models
+  let hfModelsCache: any[] | null = null;
+  let lastHfFetch = 0;
+  const HF_CACHE_TTL = 3600000; // 1 hour
+
   // API Route for fetching models (optional but nice)
   app.get("/api/models", async (req, res) => {
     try {
@@ -78,40 +83,73 @@ async function startServer() {
     }
   });
 
-  // API Route for Hugging Face Proxy
+  // API Route for fetching Hugging Face models
+  app.get("/api/hf/models", async (req, res) => {
+    const now = Date.now();
+    if (hfModelsCache && (now - lastHfFetch < HF_CACHE_TTL)) {
+      return res.json(hfModelsCache);
+    }
+
+    try {
+      // Fetch models tagged with 'conversational' that are available via hf-inference
+      const response = await fetch("https://huggingface.co/api/models?pipeline_tag=conversational&inference_provider=all&limit=100&sort=downloads&direction=-1");
+      const data = await response.json();
+      
+      // Map to a consistent format
+      const formattedModels = data.map((m: any) => ({
+        id: m.id,
+        name: m.id.split('/').pop() || m.id,
+        description: `Hugging Face model: ${m.id}`,
+        created: new Date(m.lastModified).getTime() / 1000,
+        architecture: { modality: 'text' },
+        provider: 'huggingface'
+      }));
+
+      hfModelsCache = formattedModels;
+      lastHfFetch = now;
+      res.json(formattedModels);
+    } catch (error) {
+      console.error("Error fetching HF models:", error);
+      res.status(500).json({ error: "Failed to fetch HF models" });
+    }
+  });
+
+  // API Route for Hugging Face Proxy (Modern OpenAI-Compatible)
   app.post("/api/hf/chat", async (req, res) => {
-    const { model, messages, hfApiKey, stream } = req.body;
+    const { model, messages, hfApiKey, stream, temperature, top_p, max_tokens } = req.body;
     
     if (!hfApiKey) {
       return res.status(400).json({ error: "Hugging Face API Key is required." });
     }
 
     try {
-      // Convert messages to HF format (usually a single prompt or specific format)
-      // For simplicity, we'll use the last message as the prompt or join them
-      const prompt = messages.map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') + '\nAssistant:';
-
-      const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+      // Use the modern v1/chat/completions endpoint
+      const response = await fetch(`https://api-inference.huggingface.co/v1/chat/completions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${hfApiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          inputs: prompt,
-          parameters: {
-            max_new_tokens: req.body.max_tokens || 512,
-            temperature: req.body.temperature || 0.7,
-            top_p: req.body.top_p || 0.95,
-            return_full_text: false
-          },
+          model,
+          messages,
+          max_tokens: max_tokens || 512,
+          temperature: temperature || 0.7,
+          top_p: top_p || 0.95,
           stream: stream || false
         })
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        return res.status(response.status).json({ error });
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { error: "Unknown HF Error", status: response.status };
+        }
+        
+        console.error(`HF API Error (${response.status}):`, errorData);
+        return res.status(response.status).json(errorData);
       }
 
       if (stream) {
@@ -122,30 +160,16 @@ async function startServer() {
         const reader = response.body?.getReader();
         if (!reader) return res.status(500).json({ error: "Failed to get reader" });
 
-        const decoder = new TextDecoder();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          
-          // HF stream format is slightly different, but for a simple proxy we can just pass it through
-          // and handle it on the frontend if needed. 
-          // Actually, HF returns JSON chunks in the stream.
           res.write(value);
         }
         res.end();
       } else {
         const data = await response.json();
-        // Normalize HF response to look like OpenAI/OpenRouter for the frontend
-        const content = Array.isArray(data) ? data[0].generated_text : data.generated_text;
-        res.json({
-          choices: [{
-            message: {
-              role: "assistant",
-              content: content || "No response from model"
-            }
-          }],
-          usage: { total_tokens: 0 } // HF doesn't always return usage in this format
-        });
+        // Since we're using the v1 endpoint, the response is already OpenAI-compatible
+        res.json(data);
       }
     } catch (error) {
       console.error("Error proxying to Hugging Face:", error);

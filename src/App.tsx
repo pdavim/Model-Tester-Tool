@@ -163,6 +163,7 @@ interface Model {
     is_moderated?: boolean;
   };
   isCustom?: boolean;
+  provider?: 'openrouter' | 'huggingface';
 }
 
 const CopyButton = ({ content }: { content: string }) => {
@@ -494,7 +495,7 @@ export default function App() {
                               (model.architecture?.modality && filterModality.includes(model.architecture.modality));
       const matchesFavorites = !filterFavorites || favorites.includes(model.id);
       
-      const provider = model.isCustom ? 'huggingface' : model.id.split('/')[0];
+      const provider = model.provider || (model.isCustom ? 'huggingface' : model.id.split('/')[0]);
       const matchesProvider = filterProviders.length === 0 || filterProviders.includes(provider);
       
       const hasVision = model.architecture?.modality === 'multimodal';
@@ -533,11 +534,23 @@ export default function App() {
 
   const fetchModels = async () => {
     try {
-      const response = await fetch('/api/models');
-      const data = await response.json();
-      if (data.data) {
-        setModels(data.data);
+      // Fetch OpenRouter models
+      const orResponse = await fetch('/api/models');
+      const orData = await orResponse.json();
+      const orModels = (orData.data || []).map((m: any) => ({ ...m, provider: 'openrouter' }));
+
+      // Fetch Hugging Face models
+      let hfModels: Model[] = [];
+      try {
+        const hfResponse = await fetch('/api/hf/models');
+        if (hfResponse.ok) {
+          hfModels = await hfResponse.json();
+        }
+      } catch (e) {
+        console.error('Error fetching HF models:', e);
       }
+
+      setModels([...orModels, ...hfModels]);
     } catch (error) {
       console.error('Error fetching models:', error);
       toast.error('Failed to fetch models');
@@ -563,8 +576,9 @@ export default function App() {
       ];
 
       const promises = modelsToTest.map(async (modelId) => {
-        const isCustom = customModels.some(m => m.id === modelId);
-        const endpoint = isCustom ? '/api/hf/chat' : '/api/chat';
+        const modelInfo = allModels.find(m => m.id === modelId);
+        const isHF = modelInfo?.provider === 'huggingface' || customModels.some(m => m.id === modelId);
+        const endpoint = isHF ? '/api/hf/chat' : '/api/chat';
         
         const response = await fetch(endpoint, {
           method: 'POST',
