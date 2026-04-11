@@ -123,8 +123,8 @@ async function startServer() {
     }
 
     try {
-      // Use the modern v1/chat/completions endpoint
-      const response = await fetch(`https://api-inference.huggingface.co/v1/chat/completions`, {
+      // Use the modern Inference Router endpoint (replaces deprecated api-inference domain)
+      const response = await fetch(`https://router.huggingface.co/v1/chat/completions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${hfApiKey}`,
