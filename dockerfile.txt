@@ -33,7 +33,7 @@ COPY --chown=node:node server.ts ./
 COPY --chown=node:node tsconfig.json ./
 
 # Expose the application port
-EXPOSE 3000
+EXPOSE 3767
 
 # Use a non-root user for security
 # Ensure node has access to the app directory if needed, 
