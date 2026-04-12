@@ -111,6 +111,8 @@ interface Message {
   responseTime?: number;
   error?: string;
   isLoading?: boolean;
+  mediaUrl?: string;
+  mediaType?: 'audio' | 'video' | 'image';
 }
 
 interface ChatSession {
@@ -147,6 +149,7 @@ interface Model {
   description?: string;
   context_length?: number;
   created?: number;
+  pipeline_tag?: string;
   architecture?: {
     modality?: string;
     tokenizer?: string;
@@ -165,6 +168,32 @@ interface Model {
   isCustom?: boolean;
   provider?: 'openrouter' | 'huggingface';
 }
+
+const AudioMessage = ({ url }: { url: string }) => (
+  <div className="mt-3 p-4 bg-orange-50/50 rounded-xl border border-orange-100 flex flex-col gap-3">
+    <div className="flex items-center gap-2 text-orange-700">
+      <Zap className="w-4 h-4" />
+      <span className="text-[10px] font-bold uppercase tracking-widest">Audio Generator Output</span>
+    </div>
+    <audio controls className="w-full h-10 custom-audio-player">
+      <source src={url} type="audio/wav" />
+      Your browser does not support the audio element.
+    </audio>
+  </div>
+);
+
+const VideoMessage = ({ url }: { url: string }) => (
+  <div className="mt-3 rounded-xl overflow-hidden border border-gray-100 shadow-sm flex flex-col bg-black/5">
+    <div className="p-3 bg-white border-b border-gray-100 flex items-center gap-2 text-gray-500">
+      <Eye className="w-4 h-4" />
+      <span className="text-[10px] font-bold uppercase tracking-widest">Video Generator Output</span>
+    </div>
+    <video controls className="w-full max-h-[400px] bg-black">
+      <source src={url} type="video/mp4" />
+      Your browser does not support the video element.
+    </video>
+  </div>
+);
 
 const CopyButton = ({ content }: { content: string }) => {
   const [copied, setCopied] = useState(false);
@@ -211,7 +240,7 @@ export default function App() {
   const [filterPaid, setFilterPaid] = useState(false);
   const [filterModality, setFilterModality] = useState<string[]>([]);
   const [filterProviders, setFilterProviders] = useState<string[]>([]);
-  const [filterFeatures, setFilterFeatures] = useState<string[]>([]);
+  const [filterTags, setFilterTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'name' | 'created' | 'context'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterFavorites, setFilterFavorites] = useState(false);
@@ -477,7 +506,7 @@ export default function App() {
     setFilterPaid(false);
     setFilterModality([]);
     setFilterProviders([]);
-    setFilterFeatures([]);
+    setFilterTags([]);
     setFilterFavorites(false);
     toast.success('All filters cleared');
   };
@@ -495,19 +524,16 @@ export default function App() {
                               (model.architecture?.modality && filterModality.includes(model.architecture.modality));
       const matchesFavorites = !filterFavorites || favorites.includes(model.id);
       
-      const provider = model.provider || (model.isCustom ? 'huggingface' : model.id.split('/')[0]);
+      const provider = model.provider || (model.isCustom ? 'huggingface' : (model.id.includes('/') ? model.id.split('/')[0] : 'unknown'));
       const matchesProvider = filterProviders.length === 0 || filterProviders.includes(provider);
       
-      const hasVision = model.architecture?.modality === 'multimodal';
-      const matchesFeatures = filterFeatures.length === 0 || (
-        filterFeatures.includes('vision') && hasVision
-      );
+      const matchesTags = filterTags.length === 0 || (model.pipeline_tag && filterTags.includes(model.pipeline_tag));
 
       // Only show models from providers where user has added a key
       const isHF = model.isCustom || provider === 'huggingface';
       const hasKey = isHF ? !!hfApiKey : !!openRouterKey;
 
-      return matchesSearch && matchesFree && matchesPaid && matchesModality && matchesFavorites && matchesProvider && matchesFeatures && hasKey;
+      return matchesSearch && matchesFree && matchesPaid && matchesModality && matchesFavorites && matchesProvider && matchesTags && hasKey;
     })
     .sort((a, b) => {
       let comparison = 0;
@@ -522,7 +548,8 @@ export default function App() {
     });
 
   const modalities = Array.from(new Set(allModels.map(m => m.architecture?.modality).filter(Boolean))) as string[];
-  const providersList = Array.from(new Set(allModels.map(m => m.isCustom ? 'huggingface' : m.id.split('/')[0]).filter(Boolean))).sort() as string[];
+  const providersList = Array.from(new Set(allModels.map(m => m.isCustom ? 'huggingface' : (m.id.includes('/') ? m.id.split('/')[0] : 'unknown')).filter(Boolean))).sort() as string[];
+  const pipelineTagsList = Array.from(new Set(allModels.map(m => m.pipeline_tag).filter(Boolean))) as string[];
 
   useEffect(() => {
     fetchModels();
@@ -578,12 +605,14 @@ export default function App() {
       const promises = modelsToTest.map(async (modelId) => {
         const modelInfo = allModels.find(m => m.id === modelId);
         const isHF = modelInfo?.provider === 'huggingface' || customModels.some(m => m.id === modelId);
-        const endpoint = isHF ? '/api/hf/chat' : '/api/chat';
+        const pipeline = modelInfo?.pipeline_tag || '';
         
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        // Decide whether to use chat endpoint or generic inference
+        // conversational and text-generation (chat-like) use the v1/chat endpoint
+        const isChatModel = !pipeline || pipeline === 'conversational' || pipeline === 'text-generation';
+        const endpoint = isHF ? (isChatModel ? '/api/hf/chat' : '/api/hf/inference') : '/api/chat';
+        
+        const payload = isChatModel ? {
             model: modelId,
             messages: apiMessages,
             temperature,
@@ -594,7 +623,21 @@ export default function App() {
             stream: stream,
             openRouterKey: isHF ? undefined : openRouterKey,
             hfApiKey: isHF ? hfApiKey : undefined
-          }),
+          } : {
+            model: modelId,
+            inputs: input, // For non-chat, we just send the last input
+            hfApiKey,
+            parameters: {
+              temperature,
+              top_p: topP,
+              max_new_tokens: maxTokens
+            }
+          };
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -609,7 +652,28 @@ export default function App() {
           return;
         }
 
-        if (stream) {
+        const contentType = response.headers.get('content-type');
+        
+        // Handle Media Responses
+        if (contentType && (contentType.includes('audio') || contentType.includes('video') || contentType.includes('image'))) {
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const type = contentType.includes('audio') ? 'audio' : contentType.includes('video') ? 'video' : 'image';
+          
+          const mediaMessage: Message = {
+            role: 'assistant',
+            content: `Generated ${type}`,
+            modelId,
+            mediaUrl: url,
+            mediaType: type as any,
+            responseTime: Date.now() - startTime
+          };
+          setMessages(prev => [...prev, mediaMessage]);
+          return;
+        }
+
+        // Handle Chat/Text Responses
+        if (stream && isChatModel) {
           const reader = response.body?.getReader();
           const decoder = new TextDecoder();
           let assistantContent = '';
@@ -622,9 +686,6 @@ export default function App() {
           };
           
           setMessages(prev => [...prev, assistantMessage]);
-          const messageIndex = messages.length + 1 + modelsToTest.indexOf(modelId); 
-          // Note: This index calculation might be tricky with parallel updates.
-          // Better to use a unique ID or find by modelId in the update.
 
           while (reader) {
             const { done, value } = await reader.read();
@@ -689,9 +750,21 @@ export default function App() {
             return;
           }
 
+          // Handle OpenAI format vs raw HF format
+          let content = '';
+          if (data.choices && data.choices[0]?.message) {
+            content = data.choices[0].message.content;
+          } else if (Array.isArray(data) && data[0]?.generated_text) {
+            content = data[0].generated_text;
+          } else if (data.generated_text) {
+            content = data.generated_text;
+          } else {
+            content = JSON.stringify(data, null, 2);
+          }
+
           const assistantMessage: Message = {
             role: 'assistant',
-            content: data.choices[0].message.content,
+            content,
             modelId,
             usage: data.usage,
             responseTime: endTime - startTime,
@@ -997,21 +1070,23 @@ export default function App() {
                         </div>
 
                         <div className="space-y-4">
-                          <Label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Features</Label>
-                          <div className="space-y-2">
-                            <div className="flex items-center space-x-2">
-                              <Checkbox 
-                                id="feat-vision" 
-                                checked={filterFeatures.includes('vision')}
-                                onCheckedChange={(checked) => {
-                                  if (checked) setFilterFeatures([...filterFeatures, 'vision']);
-                                  else setFilterFeatures(filterFeatures.filter(f => f !== 'vision'));
-                                }}
-                              />
-                              <label htmlFor="feat-vision" className="text-sm font-medium leading-none">
-                                Vision
-                              </label>
-                            </div>
+                          <Label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Task Types</Label>
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-2 scrollbar-thin">
+                            {pipelineTagsList.map(tag => (
+                              <div key={tag} className="flex items-center space-x-2">
+                                <Checkbox 
+                                  id={`tag-${tag}`} 
+                                  checked={filterTags.includes(tag)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) setFilterTags([...filterTags, tag]);
+                                    else setFilterTags(filterTags.filter(t => t !== tag));
+                                  }}
+                                />
+                                <label htmlFor={`tag-${tag}`} className="text-sm font-medium leading-none capitalize">
+                                  {tag.replace(/-/g, ' ')}
+                                </label>
+                              </div>
+                            ))}
                           </div>
                         </div>
 
@@ -1107,7 +1182,15 @@ export default function App() {
                                   {model.pricing?.prompt === "0" && (
                                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none text-[10px]">FREE</Badge>
                                   )}
-                                  <Badge variant="outline" className="text-[10px] uppercase">{model.architecture?.modality || 'text'}</Badge>
+                                  <Badge variant="outline" className={cn(
+                                    "text-[10px] uppercase",
+                                    model.architecture?.modality === 'audio' ? "bg-blue-50 text-blue-600 border-blue-100" :
+                                    model.architecture?.modality === 'video' ? "bg-purple-50 text-purple-600 border-purple-100" :
+                                    model.architecture?.modality === 'image' ? "bg-green-50 text-green-600 border-green-100" :
+                                    "text-gray-400 border-gray-100"
+                                  )}>
+                                    {model.architecture?.modality || 'text'}
+                                  </Badge>
                                 </div>
                               </div>
                               <div 
@@ -1517,14 +1600,30 @@ export default function App() {
                           {msg.content}
                         </div>
                       ) : (
-                        <div className="whitespace-pre-wrap">
-                          {msg.content}
-                          {msg.isLoading && (
-                            <span className="inline-flex ml-1">
-                              <span className="animate-bounce">.</span>
-                              <span className="animate-bounce [animation-delay:0.2s]">.</span>
-                              <span className="animate-bounce [animation-delay:0.4s]">.</span>
-                            </span>
+                        <div className="space-y-4">
+                          <div className="whitespace-pre-wrap">
+                            {msg.content}
+                            {msg.isLoading && (
+                              <span className="inline-flex ml-1">
+                                <span className="animate-bounce">.</span>
+                                <span className="animate-bounce [animation-delay:0.2s]">.</span>
+                                <span className="animate-bounce [animation-delay:0.4s]">.</span>
+                              </span>
+                            )}
+                          </div>
+                          
+                          {msg.mediaUrl && msg.mediaType === 'audio' && (
+                            <AudioMessage url={msg.mediaUrl} />
+                          )}
+                          
+                          {msg.mediaUrl && msg.mediaType === 'video' && (
+                            <VideoMessage url={msg.mediaUrl} />
+                          )}
+                          
+                          {msg.mediaUrl && msg.mediaType === 'image' && (
+                            <div className="mt-3 rounded-xl overflow-hidden border border-gray-100 shadow-sm">
+                              <img src={msg.mediaUrl} alt="Generated" className="w-full h-auto" />
+                            </div>
                           )}
                         </div>
                       )}

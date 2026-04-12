@@ -1,3 +1,6 @@
+import dns from 'node:dns';
+dns.setDefaultResultOrder('ipv4first');
+
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -90,27 +93,90 @@ async function startServer() {
       return res.json(hfModelsCache);
     }
 
-    try {
-      // Fetch models tagged with 'conversational' that are available via hf-inference
-      const response = await fetch("https://huggingface.co/api/models?pipeline_tag=conversational&inference_provider=all&limit=100&sort=downloads&direction=-1");
-      const data = await response.json();
-      
-      // Map to a consistent format
-      const formattedModels = data.map((m: any) => ({
-        id: m.id,
-        name: m.id.split('/').pop() || m.id,
-        description: `Hugging Face model: ${m.id}`,
-        created: new Date(m.lastModified).getTime() / 1000,
-        architecture: { modality: 'text' },
-        provider: 'huggingface'
-      }));
+    const PIPELINE_TAGS = [
+      'conversational',
+      'text-generation',
+      'text-to-speech',
+      'text-to-video',
+      'feature-extraction',
+      'summarization',
+      'translation',
+      'text-to-image'
+    ];
 
-      hfModelsCache = formattedModels;
+    try {
+      const allModelsPromises = PIPELINE_TAGS.map(async (tag) => {
+        try {
+          const response = await fetch(`https://huggingface.co/api/models?pipeline_tag=${tag}&inference_provider=all&limit=20&sort=downloads&direction=-1`);
+          const data = await response.json();
+          return data.map((m: any) => ({
+            id: m.id,
+            name: m.id.split('/').pop() || m.id,
+            description: `Hugging Face model: ${m.id}`,
+            created: new Date(m.lastModified).getTime() / 1000,
+            pipeline_tag: tag,
+            architecture: { 
+              modality: tag.includes('audio') ? 'audio' : tag.includes('video') ? 'video' : tag.includes('image') ? 'image' : 'text' 
+            },
+            provider: 'huggingface'
+          }));
+        } catch (e) {
+          console.error(`Error fetching models for tag ${tag}:`, e);
+          return [];
+        }
+      });
+
+      const results = await Promise.all(allModelsPromises);
+      const flattenedModels = results.flat();
+      
+      // Deduplicate by ID
+      const uniqueModels = Array.from(new Map(flattenedModels.map(m => [m.id, m])).values());
+
+      hfModelsCache = uniqueModels;
       lastHfFetch = now;
-      res.json(formattedModels);
+      res.json(uniqueModels);
     } catch (error) {
       console.error("Error fetching HF models:", error);
       res.status(500).json({ error: "Failed to fetch HF models" });
+    }
+  });
+
+  // API Route for Generic Hugging Face Inference (Supports blobs/non-chat)
+  app.post("/api/hf/inference", async (req, res) => {
+    const { model, inputs, hfApiKey, parameters } = req.body;
+    
+    if (!hfApiKey) {
+      return res.status(400).json({ error: "Hugging Face API Key is required." });
+    }
+
+    try {
+      const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${hfApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ inputs, parameters })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        return res.status(response.status).json(errorData);
+      }
+
+      const contentType = response.headers.get("content-type");
+      
+      if (contentType && (contentType.includes("audio") || contentType.includes("video") || contentType.includes("image"))) {
+        const buffer = await response.arrayBuffer();
+        res.setHeader("Content-Type", contentType);
+        res.send(Buffer.from(buffer));
+      } else {
+        const data = await response.json();
+        res.json(data);
+      }
+    } catch (error) {
+      console.error("Error in HF inference:", error);
+      res.status(500).json({ error: "Failed to connect to Hugging Face Inference" });
     }
   });
 
