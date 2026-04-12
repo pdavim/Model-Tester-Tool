@@ -88,26 +88,54 @@ async function startServer() {
 
   // API Route for fetching Hugging Face models
   app.get("/api/hf/models", async (req, res) => {
+    const { search } = req.query;
     const now = Date.now();
-    if (hfModelsCache && (now - lastHfFetch < HF_CACHE_TTL)) {
+
+    // Only cache the default (no search) results
+    if (!search && hfModelsCache && (now - lastHfFetch < HF_CACHE_TTL)) {
       return res.json(hfModelsCache);
     }
 
-    const PIPELINE_TAGS = [
-      'conversational',
-      'text-generation',
-      'text-to-speech',
-      'text-to-video',
-      'feature-extraction',
-      'summarization',
-      'translation',
-      'text-to-image'
-    ];
-
     try {
+      if (search) {
+        // Dynamic search on HF Hub
+        const searchUrl = `https://huggingface.co/api/models?search=${encodeURIComponent(search as string)}&limit=50&sort=downloads&direction=-1&inference_provider=all`;
+        const response = await fetch(searchUrl);
+        const data = await response.json();
+        
+        const searchResults = data.map((m: any) => ({
+          id: m.id,
+          name: m.id.split('/').pop() || m.id,
+          description: `Hugging Face model: ${m.id}`,
+          created: new Date(m.lastModified).getTime() / 1000,
+          pipeline_tag: m.pipeline_tag,
+          architecture: { 
+            modality: m.pipeline_tag?.includes('audio') ? 'audio' : 
+                      m.pipeline_tag?.includes('video') ? 'video' : 
+                      m.pipeline_tag?.includes('image') ? 'image' : 'text' 
+          },
+          provider: 'huggingface'
+        }));
+
+        return res.json(searchResults);
+      }
+
+      // Default: Fetch popular models across key tags
+      const PIPELINE_TAGS = [
+        'conversational',
+        'text-generation',
+        'text-to-speech',
+        'text-to-video',
+        'feature-extraction',
+        'summarization',
+        'translation',
+        'text-to-image'
+      ];
+
       const allModelsPromises = PIPELINE_TAGS.map(async (tag) => {
         try {
-          const response = await fetch(`https://huggingface.co/api/models?pipeline_tag=${tag}&inference_provider=all&limit=20&sort=downloads&direction=-1`);
+          // Increase limit to 30 per tag for better default variety
+          const response = await fetch(`https://huggingface.co/api/models?pipeline_tag=${tag}&inference_provider=all&limit=30&sort=downloads&direction=-1`);
           const data = await response.json();
           return data.map((m: any) => ({
             id: m.id,

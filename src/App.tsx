@@ -262,6 +262,8 @@ export default function App() {
   const [presets, setPresets] = useState<ParameterPreset[]>([]);
   const [comparisonMode, setComparisonMode] = useState(false);
   const [comparisonModels, setComparisonModels] = useState<string[]>([]);
+  const [hfHubModels, setHfHubModels] = useState<Model[]>([]);
+  const [isSearchingHub, setIsSearchingHub] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -512,8 +514,9 @@ export default function App() {
   };
 
   const allModels = [...models, ...customModels];
+  const allAvailableModels = Array.from(new Map([...allModels, ...hfHubModels].map(m => [m.id, m])).values());
 
-  const filteredModels = allModels
+  const filteredModels = allAvailableModels
     .filter(model => {
       const matchesSearch = model.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             model.id.toLowerCase().includes(searchQuery.toLowerCase());
@@ -583,6 +586,37 @@ export default function App() {
       toast.error('Failed to fetch models');
     }
   };
+
+  const searchHFModels = async (query: string) => {
+    if (!query.trim() || query.length < 3) {
+      setHfHubModels([]);
+      return;
+    }
+    
+    setIsSearchingHub(true);
+    try {
+      const response = await fetch(`/api/hf/models?search=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setHfHubModels(data);
+      }
+    } catch (e) {
+      console.error('Error searching HF Hub:', e);
+    } finally {
+      setIsSearchingHub(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery) {
+        searchHFModels(searchQuery);
+      } else {
+        setHfHubModels([]);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -976,7 +1010,13 @@ export default function App() {
                               onChange={(e) => setSearchQuery(e.target.value)}
                               className="pl-9 bg-white border-gray-200 focus:ring-orange-500"
                             />
+                            {isSearchingHub && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <RefreshCw className="w-3 h-3 text-orange-500 animate-spin" />
+                              </div>
+                            )}
                           </div>
+                          {isSearchingHub && <p className="text-[10px] text-orange-500 animate-pulse font-medium">Searching Hugging Face Hub...</p>}
                         </div>
 
                         <div className="space-y-4">
@@ -1152,8 +1192,11 @@ export default function App() {
                                   {model.isCustom && <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none text-[9px]">Custom HF</Badge>}
                                 </div>
                                 <div className="flex gap-2 items-center">
+                                  {hfHubModels.some(hm => hm.id === model.id) && !customModels.some(cm => cm.id === model.id) && (
+                                    <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-none text-[9px]">HF Hub</Badge>
+                                  )}
                                   <Badge variant="secondary" className="bg-gray-100 text-gray-600 border-none text-[9px] font-bold">
-                                    {model.isCustom ? 'HuggingFace' : 'OpenRouter'}
+                                    {model.isCustom || hfHubModels.some(hm => hm.id === model.id) ? 'HuggingFace' : 'OpenRouter'}
                                   </Badge>
                                   {model.isCustom && (
                                     <Button 
