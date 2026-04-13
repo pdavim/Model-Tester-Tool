@@ -52,6 +52,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
   const [newCustomName, setNewCustomName] = React.useState('');
 
   const {
+    models, customModels, favorites, hfHubModels,
+    searchQuery, selectedService, filterFree, filterPaid,
+    filterModality, filterTags, filterProviders, filterFavorites,
+    sortBy, sortOrder,
+    setSearchQuery, setSelectedService, setFilterFree, setFilterPaid,
+    setFilterModality, setFilterTags, setFilterProviders, setFilterFavorites,
     setSortBy, setSortOrder, clearFilters,
     fetchModels, searchHFModels, addCustomModel, toggleFavorite,
     isSearchingHub

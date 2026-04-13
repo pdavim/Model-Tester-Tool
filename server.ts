@@ -243,7 +243,15 @@ async function startServer() {
 
   // API Route for Hugging Face Proxy (Modern OpenAI-Compatible)
   app.post("/api/hf/chat", async (req, res) => {
-    const { model, messages, hfApiKey, stream, temperature, top_p, max_tokens } = req.body;
+    const { 
+      model, 
+      messages, 
+      hfApiKey, 
+      stream, 
+      temperature, 
+      top_p, 
+      max_tokens 
+    } = req.body;
     
     if (!hfApiKey) {
       return res.status(400).json({ error: "Hugging Face API Key is required." });
