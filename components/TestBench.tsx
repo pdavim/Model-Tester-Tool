@@ -228,7 +228,7 @@ export function TestBench({
                            <YAxis fontSize={9} tick={{ fill: '#9ca3af' }} />
                            <RechartsTooltip />
                            <Line type="monotone" dataKey="efficiency" stroke="#fb923c" strokeWidth={3} dot={{ fill: '#fb923c', r: 4 }} />
-                         </BarChart>
+                         </LineChart>
                        </ResponsiveContainer>
                      </CardContent>
                    </Card>

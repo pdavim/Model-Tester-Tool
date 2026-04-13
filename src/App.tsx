@@ -53,6 +53,7 @@ import {
   ShieldCheck,
   Activity,
   Box,
+  Boxes,
   BrainCircuit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -409,7 +410,7 @@ export default function App() {
     setIsProcessingFiles(true);
     const newAttachments: Attachment[] = [];
     
-    for (const file of Array.from(files)) {
+    for (const file of Array.from(files) as File[]) {
       const id = Math.random().toString(36).substring(7);
       const url = URL.createObjectURL(file);
       
@@ -2165,7 +2166,6 @@ export default function App() {
             </div>
           </>
         )}
-      </div>
       </div>
     </div>
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
