@@ -23,7 +23,7 @@ import { useConfigStore } from './store/useConfigStore';
 import { useChatStore } from './store/useChatStore';
 import { useModelStore } from './store/useModelStore';
 import { cn } from '@/lib/utils';
-import TestBench from '../components/TestBench';
+import TestBench from '@/components/TestBench';
 
 const App: React.FC = () => {
   const { sidebarOpen, setSidebarOpen, testMode, setTestMode } = useConfigStore();
