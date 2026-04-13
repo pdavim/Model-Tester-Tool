@@ -9,6 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import fs from "node:fs";
+import { HfInference } from "@huggingface/inference";
 
 async function startServer() {
   const app = express();
@@ -211,6 +212,9 @@ async function startServer() {
     }
 
     try {
+      const hf = new HfInference(hfApiKey);
+      
+      // Use generic request for maximum flexibility with non-chat models
       const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
         method: "POST",
         headers: {
@@ -220,24 +224,27 @@ async function startServer() {
         body: JSON.stringify({ inputs, parameters })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-        return res.status(response.status).json(errorData);
-      }
-
-      const contentType = response.headers.get("content-type");
+      // We still use fetch here for generic inference because HfInference methods 
+      // are specialized, but we could use hf.request({ model, inputs, parameters })
+      // Let's use hf.request for consistency if possible, but keep the blob handling
       
-      if (contentType && (contentType.includes("audio") || contentType.includes("video") || contentType.includes("image"))) {
-        const buffer = await response.arrayBuffer();
-        res.setHeader("Content-Type", contentType);
-        res.send(Buffer.from(buffer));
+      const result = await hf.request({
+        model,
+        inputs,
+        parameters,
+      });
+
+      if (result instanceof Blob) {
+        const arrayBuffer = await result.arrayBuffer();
+        res.setHeader("Content-Type", result.type);
+        res.send(Buffer.from(arrayBuffer));
       } else {
-        const data = await response.json();
-        res.json(data);
+        res.json(result);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in HF inference:", error);
-      res.status(500).json({ error: "Failed to connect to Hugging Face Inference" });
+      const statusCode = error.status || 500;
+      res.status(statusCode).json({ error: error.message || "Failed to connect to Hugging Face Inference" });
     }
   });
 
@@ -258,68 +265,51 @@ async function startServer() {
     }
 
     try {
-      // Use the modern Inference Router endpoint (replaces deprecated api-inference domain)
-      const response = await fetch(`https://router.huggingface.co/v1/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${hfApiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          max_tokens: max_tokens || 512,
-          temperature: temperature || 0.7,
-          top_p: top_p || 0.95,
-          stream: stream || false
-        })
-      });
-
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (e) {
-          errorData = { error: "Unknown HF Error", status: response.status };
-        }
-        
-        console.error(`HF API Error (${response.status}):`, errorData);
-
-        // Enhance error message for non-chat models
-        const errorMsg = errorData.error?.message || errorData.message || JSON.stringify(errorData);
-        if (errorMsg.includes("not a chat model")) {
-          return res.status(400).json({ 
-            error: { 
-              message: `The model '${model}' does not support the Chat Completions API. Please use an '-Instruct' or '-Chat' variant, or use the Generic Inference API for base models.` 
-            } 
-          });
-        }
-
-        return res.status(response.status).json(errorData);
-      }
+      const hf = new HfInference(hfApiKey);
 
       if (stream) {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        const reader = response.body?.getReader();
-        if (!reader) return res.status(500).json({ error: "Failed to get reader" });
+        const chatStream = hf.chatCompletionStream({
+          model,
+          messages,
+          max_tokens: max_tokens || 512,
+          temperature: temperature || 0.7,
+          top_p: top_p || 0.95,
+        });
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(value);
+        for await (const chunk of chatStream) {
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
         }
+        res.write('data: [DONE]\n\n');
         res.end();
       } else {
-        const data = await response.json();
-        // Since we're using the v1 endpoint, the response is already OpenAI-compatible
-        res.json(data);
+        const response = await hf.chatCompletion({
+          model,
+          messages,
+          max_tokens: max_tokens || 512,
+          temperature: temperature || 0.7,
+          top_p: top_p || 0.95,
+        });
+        res.json(response);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error proxying to Hugging Face:", error);
-      res.status(500).json({ error: "Failed to connect to Hugging Face" });
+      
+      const errorMsg = error.message || "";
+      if (errorMsg.includes("not a chat model")) {
+        return res.status(400).json({ 
+          error: { 
+            message: `The model '${model}' does not support the Chat Completions API. Please use an '-Instruct' or '-Chat' variant, or use the Generic Inference API for base models.` 
+          } 
+        });
+      }
+
+      res.status(error.status || 500).json({ 
+        error: { message: error.message || "Failed to connect to Hugging Face" } 
+      });
     }
   });
 
