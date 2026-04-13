@@ -451,7 +451,7 @@ export default function TestBench() {
               </div>
            </div>
            <p className="text-[10px] text-gray-400 font-medium">
-             DESIGNED BY ANTIGRAVITY • V2.0.0
+             DESIGNED BY PEDRO DAVIM • V2.0.0
            </p>
         </div>
       </div>

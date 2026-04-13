@@ -3,6 +3,7 @@ dns.setDefaultResultOrder('ipv4first');
 
 import express from "express";
 import path from "path";
+import helmet from "helmet";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -14,6 +15,23 @@ import { InferenceClient } from "@huggingface/inference";
 async function startServer() {
   const app = express();
   const PORT = 3767;
+
+  // Security Headers
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Needed for Vite & dynamic AI execution
+        connectSrc: ["'self'", "https://openrouter.ai", "https://huggingface.co", "https://*.huggingface.co"],
+        imgSrc: ["'self'", "data:", "https:", "blob:"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // Allow external media
+  }));
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
