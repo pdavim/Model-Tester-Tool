@@ -38,6 +38,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useConfigStore } from '@/store/useConfigStore';
 import { useModelStore } from '@/store/useModelStore';
 import { useChatStore } from '@/store/useChatStore';
 import { useTestStore } from '@/store/useTestStore';

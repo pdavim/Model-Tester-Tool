@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ApiService } from '@/services/api.service';
+import { useConfigStore } from './useConfigStore';
 import { detectModelService } from '@/lib/model-utils';
 import { toast } from 'sonner';
 import { BENCHMARK_PROMPTS, BenchmarkPrompt } from '@/utils/benchmark-prompts';
