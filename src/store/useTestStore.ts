@@ -234,16 +234,17 @@ FORMAT:
 ## Winner of the Battle
           `;
 
+          const { reportModelId } = useConfigStore.getState();
           const payload = {
-            model: 'zai-org/GLM-5.1',
+            model: reportModelId,
             messages: [{ role: 'user', content: reportPrompt }],
             temperature: 0.3,
             max_tokens: 2500,
             hfApiKey
           };
 
-          // FIXED: Use /api/hf/chat for the chat model
-          const data = await ApiService.sendMessage(payload, '/api/hf/chat');
+          const { endpoint } = detectModelService(reportModelId);
+          const data = await ApiService.sendMessage(payload, endpoint);
           const analysis = data.choices?.[0]?.message?.content || data.generated_text || "Analysis generated.";
           set({ battleAnalysis: analysis });
         } catch (error: any) {

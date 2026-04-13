@@ -33,7 +33,9 @@ import {
   Clock, 
   AlertCircle,
   Sword,
-  Check
+  Check,
+  Info,
+  ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useModelStore } from '@/store/useModelStore';
@@ -54,10 +56,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
   const {
     models, customModels, favorites, hfHubModels,
     searchQuery, selectedService, filterFree, filterPaid,
-    filterModality, filterTags, filterProviders, filterFavorites,
+    filterModality, filterTags, filterProviders, filterFavorites, filterSelected,
     sortBy, sortOrder,
     setSearchQuery, setSelectedService, setFilterFree, setFilterPaid,
-    setFilterModality, setFilterTags, setFilterProviders, setFilterFavorites,
+    setFilterModality, setFilterTags, setFilterProviders, setFilterFavorites, setFilterSelected,
     setSortBy, setSortOrder, clearFilters,
     fetchModels, searchHFModels, addCustomModel, toggleFavorite,
     isSearchingHub
@@ -98,6 +100,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
     return Array.from(set).sort();
   }, [allAvailableModels]);
 
+  const testModelsSet = React.useMemo(() => new Set(testModels), [testModels]);
+  const sessionModelsSet = React.useMemo(() => {
+    const set = new Set<string>();
+    sessions.forEach(s => {
+      if (s.parameters.selectedModel) set.add(s.parameters.selectedModel);
+    });
+    return set;
+  }, [sessions]);
+
+  const { setReportModelId, reportModelId } = useConfigStore();
+
   const filteredModels = allAvailableModels
     .filter((model, index, self) => index === self.findIndex((t) => t.id === model.id))
     .filter(model => {
@@ -121,7 +134,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
       
       const matchesTags = filterTags.length === 0 || (model.pipeline_tag && filterTags.includes(model.pipeline_tag));
 
-      return matchesSearch && matchesFree && matchesPaid && matchesModality && matchesFavorites && matchesService && matchesProvider && matchesTags;
+      const isActuallySelected = mode === 'test' ? testModelsSet.has(model.id) : (sessionSelectedModel === model.id);
+      const matchesSelected = !filterSelected || isActuallySelected;
+
+      return matchesSearch && matchesFree && matchesPaid && matchesModality && matchesFavorites && matchesService && matchesProvider && matchesTags && matchesSelected;
     })
     .sort((a, b) => {
       let comparison = 0;
@@ -132,6 +148,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
     });
 
   const handleSelectModel = (id: string) => {
+    // If the selector is being used from Settings to choose the report model
+    if (!currentSessionId && mode === 'chat') {
+        setReportModelId(id);
+        toast.success(`Report model set to ${id.split('/').pop()}`);
+        setIsOpen(false);
+        return;
+    }
+
     if (mode === 'chat') {
         if (!currentSessionId) {
           toast.error('Please select a session first');
@@ -284,6 +308,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
                     <Label htmlFor="fav" className="text-sm font-bold text-gray-700">Curated Favorites</Label>
                     <Checkbox id="fav" checked={filterFavorites} onCheckedChange={(v) => setFilterFavorites(!!v)} className="h-5 w-5 rounded-lg border-gray-200" />
                   </div>
+                  <Separator className="bg-gray-50" />
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="selected" className="text-sm font-bold text-gray-700">Selected Models Only</Label>
+                    <Checkbox id="selected" checked={filterSelected} onCheckedChange={(v) => setFilterSelected(!!v)} className="h-5 w-5 rounded-lg border-gray-200" />
+                  </div>
                 </div>
               </div>
 
@@ -382,8 +411,18 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
                           {model.provider === 'huggingface' ? <Terminal className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
                         </div>
                         <div className="flex flex-col">
-                          <h4 className="font-black text-sm tracking-tight text-gray-900 group-hover:text-orange-600 transition-colors uppercase leading-tight">
+                          <h4 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const url = model.provider === 'openrouter' 
+                                ? `https://openrouter.ai/models/${model.id}` 
+                                : `https://huggingface.co/${model.id}`;
+                              window.open(url, '_blank');
+                            }}
+                            className="font-black text-sm tracking-tight text-gray-900 group-hover:text-orange-600 transition-colors uppercase leading-tight hover:underline flex items-center gap-1"
+                          >
                             {model.name.split('/').pop()}
+                            <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </h4>
                           <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{model.provider || 'HF'} HUB</span>
                         </div>
@@ -408,7 +447,56 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
                           >
                             <Star className={cn("w-4 h-4", favorites.includes(model.id) ? "fill-yellow-400 text-yellow-400" : "text-gray-200")} />
                           </button>
-                          <span className="text-[10px] font-black text-gray-300 tracking-widest group-hover:text-orange-400 transition-colors uppercase">Deploy Link</span>
+                          
+                          <div className="flex items-center gap-2">
+                             <Dialog>
+                                <DialogTrigger asChild>
+                                   <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-orange-500 hover:bg-orange-50 rounded-lg" onClick={e => e.stopPropagation()}>
+                                      <Info className="w-4 h-4" />
+                                   </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl rounded-3xl p-8">
+                                   <DialogHeader>
+                                      <div className="flex items-center gap-3 mb-4">
+                                         <div className="p-3 bg-orange-500 rounded-2xl shadow-xl shadow-orange-500/20">
+                                            <Sparkles className="w-6 h-6 text-white" />
+                                         </div>
+                                         <div className="flex flex-col">
+                                            <DialogTitle className="text-2xl font-black uppercase tracking-tight">{model.name}</DialogTitle>
+                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Global Intelligence Identifier: {model.id}</span>
+                                         </div>
+                                      </div>
+                                   </DialogHeader>
+                                   <div className="space-y-6">
+                                      <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                                         <h5 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-3">Capabilities & Description</h5>
+                                         <p className="text-sm text-gray-600 leading-relaxed font-medium">{model.description || "No official documentation manifest available for this model yet."}</p>
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-2 gap-4">
+                                         <div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Context Capacity</span>
+                                            <span className="text-lg font-black text-gray-900">{model.context_length?.toLocaleString() || '---'} <span className="text-xs font-bold text-gray-400">Tokens</span></span>
+                                         </div>
+                                         <div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Pricing (Prompt)</span>
+                                            <span className="text-lg font-black text-green-600">${model.pricing?.prompt || '0.00'}<span className="text-[10px] text-gray-400 px-1">/ 1M</span></span>
+                                         </div>
+                                         <div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Primary Task</span>
+                                            <Badge variant="secondary" className="mt-1 bg-gray-900 text-white rounded-lg px-3 uppercase text-[9px] font-black">{model.pipeline_tag || 'General Intelligence'}</Badge>
+                                         </div>
+                                         <div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Deployment Source</span>
+                                            <Badge className="mt-1 bg-orange-50 text-orange-600 border border-orange-100 rounded-lg px-3 uppercase text-[9px] font-black">{model.provider?.toUpperCase() || 'HUB'}</Badge>
+                                         </div>
+                                      </div>
+                                   </div>
+                                </DialogContent>
+                             </Dialog>
+
+                             <span className="text-[10px] font-black text-gray-300 tracking-widest group-hover:text-orange-400 transition-colors uppercase">Deploy Link</span>
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -21,6 +21,7 @@ interface ModelState {
   filterTags: string[];
   filterProviders: string[];
   filterFavorites: boolean;
+  filterSelected: boolean;
   sortBy: 'name' | 'created' | 'context';
   sortOrder: 'asc' | 'desc';
 
@@ -39,6 +40,7 @@ interface ModelState {
   setFilterTags: (val: string[]) => void;
   setFilterProviders: (val: string[]) => void;
   setFilterFavorites: (val: boolean) => void;
+  setFilterSelected: (val: boolean) => void;
   setSortBy: (val: 'name' | 'created' | 'context') => void;
   setSortOrder: (val: 'asc' | 'desc') => void;
   clearFilters: () => void;
@@ -62,6 +64,7 @@ export const useModelStore = create<ModelState>()(
       filterTags: [],
       filterProviders: [],
       filterFavorites: false,
+      filterSelected: false,
       sortBy: 'name',
       sortOrder: 'desc',
 
@@ -112,6 +115,7 @@ export const useModelStore = create<ModelState>()(
       setFilterTags: (filterTags) => set({ filterTags }),
       setFilterProviders: (filterProviders) => set({ filterProviders }),
       setFilterFavorites: (filterFavorites) => set({ filterFavorites }),
+      setFilterSelected: (filterSelected) => set({ filterSelected }),
       setSortBy: (sortBy) => set({ sortBy }),
       setSortOrder: (sortOrder) => set({ sortOrder }),
       
@@ -123,6 +127,7 @@ export const useModelStore = create<ModelState>()(
         filterTags: [],
         filterProviders: [],
         filterFavorites: false,
+        filterSelected: false,
       })
     }),
     {

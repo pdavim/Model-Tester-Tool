@@ -24,6 +24,8 @@ import { ChatSidebar } from './components/sidebar/ChatSidebar';
 import { MessageItem } from './components/chat/MessageItem';
 import { ChatInput } from './components/chat/ChatInput';
 import { useConfigStore } from './store/useConfigStore';
+import { ModelSelector } from '@/components/modals/ModelSelector';
+import { SettingsModal } from '@/components/modals/SettingsModal';
 import { useChatStore } from './store/useChatStore';
 import { useModelStore } from './store/useModelStore';
 import { cn } from '@/lib/utils';
@@ -75,10 +77,16 @@ const App: React.FC = () => {
 
                 <Sheet>
                   <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon" className="text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-all rounded-xl">
+                    <Button variant="ghost" size="icon" className="text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-all rounded-xl relative">
                       <History className="w-5 h-5" />
+                      <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-orange-500 rounded-full border-2 border-white" />
                     </Button>
                   </SheetTrigger>
+                  
+                  <SettingsModal />
+
+                  <div className="w-[1px] h-6 bg-gray-100 mx-2" />
+
                   <SheetContent side="left" className="w-[380px] p-0 flex flex-col border-none shadow-2xl">
                     <SheetHeader className="p-8 border-b border-gray-50 bg-gray-50/50">
                       <div className="flex items-center justify-between">

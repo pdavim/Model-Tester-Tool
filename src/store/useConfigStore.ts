@@ -8,6 +8,7 @@ interface ConfigState {
   presets: ParameterPreset[];
   sidebarOpen: boolean;
   testMode: boolean;
+  reportModelId: string;
   
   setOpenRouterKey: (key: string) => void;
   setHfApiKey: (key: string) => void;
@@ -16,6 +17,7 @@ interface ConfigState {
   deletePreset: (id: string) => void;
   setSidebarOpen: (open: boolean) => void;
   setTestMode: (mode: boolean) => void;
+  setReportModelId: (id: string) => void;
 }
 
 export const useConfigStore = create<ConfigState>()(
@@ -26,6 +28,7 @@ export const useConfigStore = create<ConfigState>()(
       presets: [],
       sidebarOpen: true,
       testMode: false,
+      reportModelId: 'google/gemini-2.0-flash-exp:free',
 
       setOpenRouterKey: (openRouterKey) => set({ openRouterKey }),
       setHfApiKey: (hfApiKey) => set({ hfApiKey }),
@@ -36,6 +39,7 @@ export const useConfigStore = create<ConfigState>()(
       })),
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
       setTestMode: (testMode) => set({ testMode }),
+      setReportModelId: (reportModelId) => set({ reportModelId }),
     }),
     {
       name: 'model-tester-config',
