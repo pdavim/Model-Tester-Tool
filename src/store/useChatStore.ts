@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Message, Attachment, ChatSession, ChatParameters } from '@/types';
+import { useConfigStore } from './useConfigStore';
+import { useModelStore } from './useModelStore';
 import { ApiService } from '@/services/api.service';
 import { toast } from 'sonner';
 
@@ -260,8 +261,13 @@ export const useChatStore = create<ChatState>()(
           }));
 
           try {
-            // Determine endpoint based on provider if known, or fallback to simple check
-            const isHF = modelId.includes('/') || !modelId.includes(':');
+            // Precise service detection: Look up the model in the stores to determine the correct provider
+            const { models, customModels, hfHubModels } = useModelStore.getState();
+            const allModels = [...models, ...customModels, ...hfHubModels];
+            const modelObj = allModels.find(m => m.id === modelId);
+            
+            // Default to 'openrouter' if not found in HF lists, or use the explicit provider field
+            const isHF = modelObj?.provider === 'huggingface' || modelObj?.isCustom;
             const endpoint = isHF ? '/api/hf/chat' : '/api/chat';
 
             const payload = {
