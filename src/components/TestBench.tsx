@@ -45,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
+  DropdownMenuGroup,
   DropdownMenuItem, 
   DropdownMenuLabel, 
   DropdownMenuSeparator, 
@@ -126,21 +127,23 @@ export default function TestBench() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-80 max-h-[400px] overflow-y-auto">
-                <DropdownMenuLabel>Individual Capability Tests</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {BENCHMARK_PROMPTS.map(p => (
-                  <DropdownMenuItem 
-                    key={p.id} 
-                    onClick={() => handleRunSinglePrompt(p)} 
-                    className="flex flex-col items-start gap-1 p-3 cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="font-bold text-xs">{p.title}</span>
-                      <Badge variant="secondary" className="text-[9px] uppercase">{p.category}</Badge>
-                    </div>
-                    <span className="text-[10px] text-gray-500 line-clamp-1">{p.prompt}</span>
-                  </DropdownMenuItem>
-                ))}
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Individual Capability Tests</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {BENCHMARK_PROMPTS.map(p => (
+                    <DropdownMenuItem 
+                      key={p.id} 
+                      onClick={() => handleRunSinglePrompt(p)} 
+                      className="flex flex-col items-start gap-1 p-3 cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-bold text-xs">{p.title}</span>
+                        <Badge variant="secondary" className="text-[9px] uppercase">{p.category}</Badge>
+                      </div>
+                      <span className="text-[10px] text-gray-500 line-clamp-1">{p.prompt}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
 

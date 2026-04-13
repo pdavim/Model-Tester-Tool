@@ -39,6 +39,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -157,25 +158,27 @@ export const ChatSidebar: React.FC = () => {
                   <Bookmark className="w-4 h-4 text-gray-500" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl shadow-2xl border-gray-100">
-                <DropdownMenuLabel className="text-[11px] font-black uppercase tracking-widest text-gray-400 p-3">Intelligence Presets</DropdownMenuLabel>
-                <DropdownMenuSeparator className="mb-2" />
-                {presets.map(preset => (
-                  <DropdownMenuItem key={preset.id} className="justify-between group rounded-lg p-3 cursor-pointer hover:bg-gray-50">
-                    <span className="truncate font-bold text-gray-700">{preset.name}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-7 w-7 opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 hover:bg-red-50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deletePreset(preset.id);
-                      }}
-                    >
-                      <Trash className="w-3.5 h-3.5" />
-                    </Button>
-                  </DropdownMenuItem>
-                ))}
+               <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl shadow-2xl border-gray-100">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-[11px] font-black uppercase tracking-widest text-gray-400 p-3">Intelligence Presets</DropdownMenuLabel>
+                  <DropdownMenuSeparator className="mb-2" />
+                  {presets.map(preset => (
+                    <DropdownMenuItem key={preset.id} className="justify-between group rounded-lg p-3 cursor-pointer hover:bg-gray-50">
+                      <span className="truncate font-bold text-gray-700">{preset.name}</span>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-7 w-7 opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 hover:bg-red-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deletePreset(preset.id);
+                        }}
+                      >
+                        <Trash className="w-3.5 h-3.5" />
+                      </Button>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
