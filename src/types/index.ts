@@ -41,6 +41,7 @@ export interface ChatParameters {
   presencePenalty: number;
   systemPrompt: string;
   selectedModel: string;
+  selectedService: 'openrouter' | 'huggingface' | 'all';
 }
 
 export interface ParameterPreset {

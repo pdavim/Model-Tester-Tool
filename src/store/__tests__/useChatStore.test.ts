@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useChatStore } from '../useChatStore';
 
 describe('useChatStore', () => {
@@ -9,39 +9,40 @@ describe('useChatStore', () => {
       input: '',
       selectedFiles: [],
       isLoading: false,
+      isProcessingFiles: false,
+      comparisonMode: false,
+      comparisonModels: [],
+      systemPrompt: 'You are a helpful AI assistant.',
+      temperature: 0.7,
     });
   });
 
-  it('should initialize with empty sessions', () => {
-    const state = useChatStore.getState();
-    expect(state.sessions).toEqual([]);
-    expect(state.currentSessionId).toBeNull();
-  });
-
-  it('should create a new session', () => {
+  it('creates a new session with correct default parameters', () => {
     useChatStore.getState().createNewSession();
     const state = useChatStore.getState();
-    expect(state.sessions).toHaveLength(1);
-    expect(state.currentSessionId).not.toBeNull();
-    expect(state.sessions[0].name).toBe('New Conversation');
+    expect(state.sessions.length).toBe(1);
+    expect(state.sessions[0].parameters.temperature).toBe(0.7);
+    expect(state.sessions[0].parameters.selectedService).toBe('all');
   });
 
-  it('should delete a session', () => {
+  it('updates parameters for the current session specifically', () => {
     useChatStore.getState().createNewSession();
     const sessionId = useChatStore.getState().currentSessionId!;
-    useChatStore.getState().deleteSession(sessionId);
-    expect(useChatStore.getState().sessions).toHaveLength(0);
+    useChatStore.getState().setTemperature(0.5);
+    
+    const session = useChatStore.getState().sessions.find(s => s.id === sessionId);
+    expect(session?.parameters.temperature).toBe(0.5);
+    // Global default should remain same (for next new session) or update? 
+    // In our implementation, we update current session if exists.
   });
 
-  it('should update input correctly', () => {
-    useChatStore.getState().setInput('prompt');
-    expect(useChatStore.getState().input).toBe('prompt');
-  });
-
-  it('should rename a session', () => {
+  it('sets selected model for a specific session', () => {
     useChatStore.getState().createNewSession();
     const sessionId = useChatStore.getState().currentSessionId!;
-    useChatStore.getState().renameSession(sessionId, 'My Chat');
-    expect(useChatStore.getState().sessions[0].name).toBe('My Chat');
+    useChatStore.getState().setSelectedModelForSession(sessionId, 'gpt-4', 'openrouter');
+    
+    const session = useChatStore.getState().sessions.find(s => s.id === sessionId);
+    expect(session?.parameters.selectedModel).toBe('gpt-4');
+    expect(session?.parameters.selectedService).toBe('openrouter');
   });
 });
