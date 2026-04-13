@@ -8,7 +8,8 @@ import {
   Tooltip as RechartsTooltip, 
   ResponsiveContainer,
   LineChart,
-  Line
+  Line,
+  Cell
 } from 'recharts';
 import { 
   Play, 

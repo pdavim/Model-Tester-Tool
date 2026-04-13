@@ -15,7 +15,12 @@ import {
   Minimize2,
   Sparkles,
   Zap,
-  Gauge
+  Gauge,
+  Key,
+  Lock,
+  Shield,
+  Fingerprint,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -25,6 +30,7 @@ import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { 
   Tooltip, 
   TooltipContent, 
@@ -38,8 +44,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useChatStore } from '@/store/useChatStore';
 import { useConfigStore } from '@/store/useConfigStore';
+import { useModelStore } from '@/store/useModelStore';
 import { ModelSelector } from '@/components/modals/ModelSelector';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -49,7 +62,11 @@ export const ChatSidebar: React.FC = () => {
     sidebarOpen,
     presets,
     addPreset,
-    deletePreset
+    deletePreset,
+    openRouterKey,
+    hfApiKey,
+    setOpenRouterKey,
+    setHfApiKey
   } = useConfigStore();
 
   const {
@@ -66,7 +83,12 @@ export const ChatSidebar: React.FC = () => {
     clearChat
   } = useChatStore();
 
+  const { models, customModels, hfHubModels } = useModelStore();
+  const allModels = [...models, ...customModels, ...hfHubModels];
+
   const currentSession = sessions.find(s => s.id === currentSessionId);
+  const selectedModelId = currentSession?.parameters.selectedModel;
+  const selectedModel = allModels.find(m => m.id === selectedModelId);
   
   // Use session parameters or global defaults
   const params = currentSession?.parameters || {
@@ -79,6 +101,8 @@ export const ChatSidebar: React.FC = () => {
     selectedModel: '',
     selectedService: 'all'
   };
+
+  const maxTokensLimit = selectedModel?.context_length || 4096;
 
   const handleSavePreset = () => {
     const name = prompt('Enter preset name:');
@@ -135,7 +159,7 @@ export const ChatSidebar: React.FC = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl shadow-2xl border-gray-100">
                 <DropdownMenuLabel className="text-[11px] font-black uppercase tracking-widest text-gray-400 p-3">Intelligence Presets</DropdownMenuLabel>
-                <Separator className="mb-2" />
+                <DropdownMenuSeparator className="mb-2" />
                 {presets.map(preset => (
                   <DropdownMenuItem key={preset.id} className="justify-between group rounded-lg p-3 cursor-pointer hover:bg-gray-50">
                     <span className="truncate font-bold text-gray-700">{preset.name}</span>
@@ -158,49 +182,21 @@ export const ChatSidebar: React.FC = () => {
         </div>
       </div>
 
-      <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0 no-scrollbar">
         <div className="p-8 space-y-10">
-          {/* Comparison Mode Toggle */}
-          <div className="relative group overflow-hidden p-5 bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-xl shadow-gray-200 text-white">
-            <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Layers className="w-16 h-16 scale-150 rotate-12" />
-            </div>
-            <div className="relative flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/10 rounded-lg backdrop-blur-md">
-                   <Zap className="w-4 h-4 text-orange-400" />
-                </div>
-                <Label className="text-sm font-black uppercase tracking-widest leading-none">Multi-Sync</Label>
-              </div>
-              <Checkbox 
-                checked={comparisonMode} 
-                onCheckedChange={(v) => setComparisonMode(!!v)} 
-                className="h-6 w-6 border-white/20 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 rounded-lg shadow-inner"
-              />
-            </div>
-            <p className="text-[10px] text-gray-400 font-bold mb-4 opacity-80 leading-relaxed uppercase tracking-tighter">Enable simultaneous benchmarking for up to 6 models in this session.</p>
-            {comparisonMode && (
-              <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                <div className="flex flex-wrap gap-1.5">
-                  {comparisonModels.map(id => (
-                    <Badge key={id} variant="secondary" className="bg-white/10 hover:bg-white/20 border-white/5 text-white/90 text-[9px] font-black h-6 px-3 rounded-full transition-colors group/badge">
-                      {id.split('/').pop()?.toUpperCase()}
-                      <button className="ml-2 text-white/30 hover:text-orange-400" onClick={() => setComparisonModels(comparisonModels.filter(m => m !== id))}>×</button>
-                    </Badge>
-                  ))}
-                  {comparisonModels.length === 0 && <span className="text-[10px] text-orange-400 font-black uppercase">No Contenders Selected</span>}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Model selection section */}
+          
+          {/* Model Selection - Targeting Interface */}
           {!comparisonMode && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <Label className="text-[11px] font-black uppercase tracking-widest text-gray-400">Target Manifest</Label>
-                {params.selectedModel && (
-                  <Badge variant="outline" className="text-[9px] font-bold border-orange-100 text-orange-600 bg-orange-50 uppercase">{params.selectedService}</Badge>
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-orange-500" />
+                  <Label className="text-[11px] font-black uppercase tracking-widest text-gray-900">Targeting Interface</Label>
+                </div>
+                {selectedModelId && (
+                  <Badge variant="outline" className="text-[9px] font-bold border-orange-100 text-orange-600 bg-orange-50 uppercase tracking-tighter">
+                    {currentSession?.parameters.selectedService || 'HUB'}
+                  </Badge>
                 )}
               </div>
               <ModelSelector mode="chat" />
@@ -209,56 +205,200 @@ export const ChatSidebar: React.FC = () => {
 
           <Separator className="bg-gray-100" />
 
-          {/* Core Settings */}
-          <div className="space-y-10">
-            {/* System Prompt */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-gray-400" />
-                <Label className="text-[11px] font-black uppercase tracking-widest text-gray-400">Core Logic (System)</Label>
+          <Accordion type="multiple" defaultValue={["security", "logic", "neural"]} className="w-full space-y-8">
+            
+            {/* Security Core - API KEYS */}
+            <AccordionItem value="security" className="border-none">
+              <div className="flex items-center gap-2 mb-4">
+                <Shield className="w-4 h-4 text-orange-500" />
+                <Label className="text-[11px] font-black uppercase tracking-widest text-gray-900">Security Core</Label>
+              </div>
+              <AccordionContent className="space-y-4 pt-2">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-bold uppercase tracking-tight text-gray-400">OpenRouter Key</Label>
+                    {openRouterKey ? <Lock className="w-3 h-3 text-green-500" /> : <Fingerprint className="w-3 h-3 text-red-400" />}
+                  </div>
+                  <Input 
+                    type="password"
+                    value={openRouterKey}
+                    onChange={(e) => setOpenRouterKey(e.target.value)}
+                    placeholder="sk-or-v1-..."
+                    className="h-10 bg-gray-50/50 border-gray-100 rounded-xl text-xs font-mono shadow-inner focus:ring-orange-500/20"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-bold uppercase tracking-tight text-gray-400">HuggingFace Hub</Label>
+                    {hfApiKey ? <Lock className="w-3 h-3 text-green-500" /> : <Fingerprint className="w-3 h-3 text-red-400" />}
+                  </div>
+                  <Input 
+                    type="password"
+                    value={hfApiKey}
+                    onChange={(e) => setHfApiKey(e.target.value)}
+                    placeholder="hf_..."
+                    className="h-10 bg-gray-50/50 border-gray-100 rounded-xl text-xs font-mono shadow-inner focus:ring-orange-500/20"
+                  />
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Logical Parameters */}
+            <AccordionItem value="logic" className="border-none">
+              <div className="flex items-center gap-2 mb-4">
+                <Cpu className="w-4 h-4 text-blue-500" />
+                <Label className="text-[11px] font-black uppercase tracking-widest text-gray-900">Logical Params</Label>
+              </div>
+              <AccordionContent className="space-y-8 pt-2">
+                {/* Temperature */}
+                <div className="space-y-5">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-3.5 h-3.5 text-orange-500" />
+                      <Label className="text-[10px] font-bold uppercase tracking-tight text-gray-500">Creativity</Label>
+                    </div>
+                    <span className="text-[10px] font-black bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full border border-orange-100">{params.temperature}</span>
+                  </div>
+                  <Slider 
+                    value={[params.temperature]} 
+                    onValueChange={(v) => setTemperature(v[0])} 
+                    max={2} 
+                    step={0.01} 
+                    className="py-1"
+                  />
+                </div>
+
+                {/* Top P */}
+                <div className="space-y-5">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                      <Label className="text-[10px] font-bold uppercase tracking-tight text-gray-500">Nucleus Sampling</Label>
+                    </div>
+                    <span className="text-[10px] font-black bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full border border-purple-100">{params.topP}</span>
+                  </div>
+                  <Slider 
+                    value={[params.topP]} 
+                    onValueChange={(v) => setTopP(v[0])} 
+                    max={1} 
+                    step={0.01} 
+                    className="py-1"
+                  />
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Neural Parameters */}
+            <AccordionItem value="neural" className="border-none">
+              <div className="flex items-center gap-2 mb-4">
+                <Zap className="w-4 h-4 text-yellow-500" />
+                <Label className="text-[11px] font-black uppercase tracking-widest text-gray-900">Neural Response</Label>
+              </div>
+              <AccordionContent className="space-y-8 pt-2">
+                {/* Max Tokens */}
+                <div className="space-y-5">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Maximize2 className="w-3.5 h-3.5 text-blue-500" />
+                      <Label className="text-[10px] font-bold uppercase tracking-tight text-gray-500">Token Horizon</Label>
+                    </div>
+                    <span className="text-[10px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">{params.maxTokens}</span>
+                  </div>
+                  <Slider 
+                    value={[params.maxTokens]} 
+                    onValueChange={(v) => setMaxTokens(v[0])} 
+                    max={maxTokensLimit} 
+                    step={1} 
+                    className="py-1"
+                  />
+                  <p className="text-[9px] text-gray-400 font-medium italic">Adjusted to model capacity: {maxTokensLimit} tokens</p>
+                </div>
+
+                {/* Penalties */}
+                <div className="grid grid-cols-1 gap-6">
+                  <div className="space-y-5">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-[10px] font-bold uppercase tracking-tight text-gray-500">Freq. Penalty</Label>
+                      <span className="text-[9px] font-bold text-gray-400">{params.frequencyPenalty}</span>
+                    </div>
+                    <Slider 
+                      value={[params.frequencyPenalty]} 
+                      onValueChange={(v) => setFrequencyPenalty(v[0])} 
+                      min={-2}
+                      max={2} 
+                      step={0.01} 
+                      className="py-1"
+                    />
+                  </div>
+                  <div className="space-y-5">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-[10px] font-bold uppercase tracking-tight text-gray-500">Pres. Penalty</Label>
+                      <span className="text-[9px] font-bold text-gray-400">{params.presencePenalty}</span>
+                    </div>
+                    <Slider 
+                      value={[params.presencePenalty]} 
+                      onValueChange={(v) => setPresencePenalty(v[0])} 
+                      min={-2}
+                      max={2} 
+                      step={0.01} 
+                      className="py-1"
+                    />
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+          </Accordion>
+
+          <Separator className="bg-gray-100" />
+
+          {/* System Logic */}
+          <div className="space-y-6">
+             <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-orange-500" />
+                <Label className="text-[11px] font-black uppercase tracking-widest text-gray-900">Cognitive Directive</Label>
               </div>
               <Textarea 
                 value={params.systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
                 placeholder="Initialize model directives..."
-                className="min-h-[120px] bg-gray-50/50 border-gray-100 rounded-xl text-xs font-medium leading-relaxed resize-none focus:ring-orange-500/20 shadow-inner"
+                className="min-h-[140px] bg-gray-50/50 border-gray-100 rounded-2xl text-[11px] font-medium leading-relaxed resize-none focus:ring-orange-500/20 shadow-inner"
               />
-            </div>
+          </div>
 
-            {/* Temperature */}
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                   <Flame className="w-4 h-4 text-orange-500" />
-                   <Label className="text-[11px] font-black uppercase tracking-widest text-gray-400">Creativity Index</Label>
-                </div>
-                <span className="text-xs font-black bg-orange-50 text-orange-600 px-3 py-1 rounded-full border border-orange-100 shadow-sm">{params.temperature}</span>
+          <div className="pt-4">
+             {/* Comparison Mode Toggle */}
+            <div className="relative group overflow-hidden p-6 bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-xl shadow-gray-200 text-white">
+              <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Layers className="w-16 h-16 scale-150 rotate-12" />
               </div>
-              <Slider 
-                value={[params.temperature]} 
-                onValueChange={(v) => setTemperature(v[0])} 
-                max={2} 
-                step={0.01} 
-                className="py-2"
-              />
-            </div>
-
-            {/* Max Tokens */}
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                   <Maximize2 className="w-4 h-4 text-blue-500" />
-                   <Label className="text-[11px] font-black uppercase tracking-widest text-gray-400">Response Depth</Label>
+              <div className="relative flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/10 rounded-lg backdrop-blur-md">
+                    <Zap className="w-4 h-4 text-orange-400" />
+                  </div>
+                  <Label className="text-xs font-black uppercase tracking-widest leading-none">Multi-Sync</Label>
                 </div>
-                <span className="text-xs font-black bg-blue-50 text-blue-600 px-3 py-1 rounded-full border border-blue-100 shadow-sm">{params.maxTokens}</span>
+                <Checkbox 
+                  checked={comparisonMode} 
+                  onCheckedChange={(v) => setComparisonMode(!!v)} 
+                  className="h-6 w-6 border-white/20 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 rounded-lg shadow-inner"
+                />
               </div>
-              <Slider 
-                value={[params.maxTokens]} 
-                onValueChange={(v) => setMaxTokens(v[0])} 
-                max={8192} 
-                step={1} 
-                className="py-2"
-              />
+              <p className="text-[9px] text-gray-400 font-bold mb-4 opacity-70 leading-relaxed uppercase tracking-tighter">Simultaneous benchmarking. Up to 6 models in one-shot exchange.</p>
+              {comparisonMode && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex flex-wrap gap-1.5">
+                    {comparisonModels.map(id => (
+                      <Badge key={id} variant="secondary" className="bg-white/10 hover:bg-white/20 border-white/5 text-white/90 text-[8px] font-black h-5 px-2 rounded-full transition-colors group/badge">
+                        {id.split('/').pop()?.toUpperCase()}
+                        <button className="ml-1.5 text-white/30 hover:text-orange-400" onClick={() => setComparisonModels(comparisonModels.filter(m => m !== id))}>×</button>
+                      </Badge>
+                    ))}
+                    {comparisonModels.length === 0 && <span className="text-[9px] text-orange-400 font-black uppercase tracking-widest animate-pulse">Select Contenders</span>}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -271,9 +411,10 @@ export const ChatSidebar: React.FC = () => {
           className="w-full h-12 gap-3 rounded-2xl font-black text-xs uppercase tracking-widest border-gray-100 bg-white hover:bg-red-50 hover:text-red-500 hover:border-red-100 shadow-sm transition-all duration-300"
           onClick={clearChat}
         >
-          <Trash2 className="w-4 h-4" /> Purge Memory
+          <Trash2 className="w-4 h-4" /> Purge Session
         </Button>
       </div>
     </motion.div>
   );
 };
+
