@@ -24,10 +24,10 @@ async function startServer() {
   // API Route for OpenRouter Proxy
   app.post("/api/chat", async (req, res) => {
     const { stream, openRouterKey, ...body } = req.body;
-    const apiKey = openRouterKey || process.env.OPENROUTER_API_KEY;
+    const apiKey = openRouterKey;
     
     if (!apiKey) {
-      return res.status(400).json({ error: "OpenRouter API Key is required. Please set it in Settings." });
+      return res.status(401).json({ error: "OpenRouter API Key is required. Please set it in Settings." });
     }
 
     try {
@@ -78,7 +78,10 @@ async function startServer() {
   // API Route for fetching models (optional but nice)
   app.get("/api/models", async (req, res) => {
     try {
-      const response = await fetch("https://openrouter.ai/api/v1/models");
+      const hfKey = process.env.OPENROUTER_API_KEY;
+      const response = await fetch("https://openrouter.ai/api/v1/models", {
+        headers: hfKey ? { "Authorization": `Bearer ${hfKey}` } : {}
+      });
       const data = await response.json();
       res.json(data);
     } catch (error) {
@@ -97,10 +100,13 @@ async function startServer() {
     }
 
     try {
+      const hfKey = process.env.HF_KEY;
+      const authHeader = hfKey ? { "Authorization": `Bearer ${hfKey}` } : {};
+
       if (search) {
         // Dynamic search on HF Hub
         const searchUrl = `https://huggingface.co/api/models?search=${encodeURIComponent(search as string)}&limit=50&sort=downloads&direction=-1&inference_provider=all`;
-        const response = await fetch(searchUrl);
+        const response = await fetch(searchUrl, { headers: authHeader });
         const data = await response.json();
         
         const searchResults = data.map((m: any) => ({
@@ -109,6 +115,7 @@ async function startServer() {
           description: `Hugging Face model: ${m.id}`,
           created: new Date(m.lastModified).getTime() / 1000,
           pipeline_tag: m.pipeline_tag,
+          pricing: { prompt: "0", completion: "0" },
           architecture: { 
             modality: m.pipeline_tag?.includes('audio') ? 'audio' : 
                       m.pipeline_tag?.includes('video') ? 'video' : 
@@ -135,7 +142,9 @@ async function startServer() {
       const allModelsPromises = PIPELINE_TAGS.map(async (tag) => {
         try {
           // Increase limit to 30 per tag for better default variety
-          const response = await fetch(`https://huggingface.co/api/models?pipeline_tag=${tag}&inference_provider=all&limit=30&sort=downloads&direction=-1`);
+          const response = await fetch(`https://huggingface.co/api/models?pipeline_tag=${tag}&inference_provider=all&limit=30&sort=downloads&direction=-1`, {
+            headers: authHeader
+          });
           const data = await response.json();
           return data.map((m: any) => ({
             id: m.id,
@@ -143,6 +152,7 @@ async function startServer() {
             description: `Hugging Face model: ${m.id}`,
             created: new Date(m.lastModified).getTime() / 1000,
             pipeline_tag: tag,
+            pricing: { prompt: "0", completion: "0" },
             architecture: { 
               modality: tag.includes('audio') ? 'audio' : tag.includes('video') ? 'video' : tag.includes('image') ? 'image' : 'text' 
             },

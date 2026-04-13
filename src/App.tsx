@@ -532,11 +532,7 @@ export default function App() {
       
       const matchesTags = filterTags.length === 0 || (model.pipeline_tag && filterTags.includes(model.pipeline_tag));
 
-      // Only show models from providers where user has added a key
-      const isHF = model.isCustom || provider === 'huggingface';
-      const hasKey = isHF ? !!hfApiKey : !!openRouterKey;
-
-      return matchesSearch && matchesFree && matchesPaid && matchesModality && matchesFavorites && matchesProvider && matchesTags && hasKey;
+      return matchesSearch && matchesFree && matchesPaid && matchesModality && matchesFavorites && matchesProvider && matchesTags;
     })
     .sort((a, b) => {
       let comparison = 0;
