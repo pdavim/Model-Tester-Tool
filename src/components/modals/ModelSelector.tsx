@@ -60,8 +60,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
     setFilterModality, setFilterTags, setFilterProviders, setFilterFavorites,
     setSortBy, setSortOrder, clearFilters,
     fetchModels, searchHFModels, addCustomModel, toggleFavorite,
-    isSearchingHub,
-    setFilterProviders, setFilterTags
+    isSearchingHub
   } = useModelStore();
 
   const { sessions, currentSessionId, setSelectedModelForSession, comparisonModels, setComparisonModels } = useChatStore();
