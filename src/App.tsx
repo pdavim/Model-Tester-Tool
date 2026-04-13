@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  History, 
-  RefreshCw, 
-  Settings2, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  History,
+  RefreshCw,
+  Settings2,
   Cpu,
   Plus,
   Pencil,
@@ -33,9 +33,9 @@ import { Separator } from '@/components/ui/separator';
 
 const App: React.FC = () => {
   const { sidebarOpen, setSidebarOpen, testMode, setTestMode } = useConfigStore();
-  const { 
-    sessions, currentSessionId, createNewSession, setCurrentSessionId, 
-    deleteSession, renameSession, isLoading 
+  const {
+    sessions, currentSessionId, createNewSession, setCurrentSessionId,
+    deleteSession, renameSession, isLoading
   } = useChatStore();
   const { fetchModels } = useModelStore();
 
@@ -53,7 +53,7 @@ const App: React.FC = () => {
     <TooltipProvider>
       <div className="flex h-screen bg-white text-gray-900 overflow-hidden font-sans antialiased">
         <Toaster position="top-right" expand={false} richColors />
-        
+
         {/* Responsive Sidebar Container */}
         <ChatSidebar />
 
@@ -62,15 +62,15 @@ const App: React.FC = () => {
           <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex items-center justify-between px-8 z-30 sticky top-0">
             <div className="flex items-center gap-6 overflow-hidden">
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setSidebarOpen(!sidebarOpen)}
                   className="text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-all rounded-xl"
                 >
                   {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                 </Button>
-                
+
                 <Sheet>
                   <SheetTrigger asChild>
                     <Button variant="ghost" size="icon" className="text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-all rounded-xl">
@@ -91,31 +91,31 @@ const App: React.FC = () => {
                     </SheetHeader>
                     <ScrollArea className="flex-1 bg-white">
                       <div className="p-6 space-y-3">
-                         {sessions.map(session => (
-                           <div
-                             key={session.id}
-                             onClick={() => setCurrentSessionId(session.id)}
-                             className={cn(
-                               "group flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2",
-                               currentSessionId === session.id 
-                                ? "bg-orange-50/50 border-orange-500/20 text-orange-700 shadow-md translate-x-1" 
+                        {sessions.map(session => (
+                          <div
+                            key={session.id}
+                            onClick={() => setCurrentSessionId(session.id)}
+                            className={cn(
+                              "group flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2",
+                              currentSessionId === session.id
+                                ? "bg-orange-50/50 border-orange-500/20 text-orange-700 shadow-md translate-x-1"
                                 : "hover:bg-gray-50 border-transparent text-gray-500 hover:border-gray-100"
-                             )}
-                           >
-                             <div className="flex items-center gap-4 truncate">
-                               <div className={cn(
-                                 "p-2 rounded-xl transition-colors",
-                                 currentSessionId === session.id ? "bg-orange-500 text-white" : "bg-gray-100 group-hover:bg-gray-200"
-                               )}>
-                                 <MessageSquare className="w-4 h-4" />
-                               </div>
-                               <span className="truncate text-sm font-black uppercase tracking-tight">{session.name}</span>
-                             </div>
-                             <Button variant="ghost" size="icon" className="h-9 w-9 opacity-0 group-hover:opacity-100 rounded-xl hover:bg-red-50 hover:text-red-500" onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}>
-                               <Trash className="w-4 h-4" />
-                             </Button>
-                           </div>
-                         ))}
+                            )}
+                          >
+                            <div className="flex items-center gap-4 truncate">
+                              <div className={cn(
+                                "p-2 rounded-xl transition-colors",
+                                currentSessionId === session.id ? "bg-orange-500 text-white" : "bg-gray-100 group-hover:bg-gray-200"
+                              )}>
+                                <MessageSquare className="w-4 h-4" />
+                              </div>
+                              <span className="truncate text-sm font-black uppercase tracking-tight">{session.name}</span>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-9 w-9 opacity-0 group-hover:opacity-100 rounded-xl hover:bg-red-50 hover:text-red-500" onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}>
+                              <Trash className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
                       </div>
                     </ScrollArea>
                   </SheetContent>
@@ -144,23 +144,23 @@ const App: React.FC = () => {
 
             <div className="flex items-center gap-6">
               <div className="flex bg-gray-100/80 p-1.5 rounded-2xl border border-gray-200/50 shadow-inner">
-                <Button 
-                  variant={!testMode ? "default" : "ghost"} 
-                  size="sm" 
-                  onClick={() => setTestMode(false)} 
+                <Button
+                  variant={!testMode ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setTestMode(false)}
                   className={cn(
-                    "h-9 px-6 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl", 
+                    "h-9 px-6 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl",
                     !testMode ? "bg-white text-orange-600 shadow-lg scale-[1.02]" : "text-gray-500 hover:text-gray-900"
                   )}
                 >
                   Analysis
                 </Button>
-                <Button 
-                  variant={testMode ? "default" : "ghost"} 
-                  size="sm" 
-                  onClick={() => setTestMode(true)} 
+                <Button
+                  variant={testMode ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setTestMode(true)}
                   className={cn(
-                    "h-9 px-6 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl", 
+                    "h-9 px-6 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl",
                     testMode ? "bg-white text-orange-600 shadow-lg scale-[1.02]" : "text-gray-500 hover:text-gray-900"
                   )}
                 >
@@ -198,15 +198,15 @@ const App: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   <Separator orientation="vertical" className="h-4" />
-                  
+
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Latency</span>
                     <Badge variant="ghost" className="text-[11px] font-black text-gray-500">READY</Badge>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-4">
                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Auto-Scale ON</span>
                   <Globe className="w-4 h-4 text-green-500 opacity-50" />
@@ -235,8 +235,8 @@ const App: React.FC = () => {
                               Access localized intelligence manifolds. Select your model interface from the sidebar and begin the neural exchange.
                             </p>
                             <div className="pt-8 flex flex-wrap justify-center gap-3">
-                               <Badge className="bg-gray-100 text-gray-500 hover:bg-gray-100 border-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-default">Multi-Modal READY</Badge>
-                               <Badge className="bg-orange-500/10 text-orange-600 hover:bg-orange-500/10 border-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-default">GPU ACCELERATED</Badge>
+                              <Badge className="bg-gray-100 text-gray-500 hover:bg-gray-100 border-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-default">Multi-Modal READY</Badge>
+                              <Badge className="bg-orange-500/10 text-orange-600 hover:bg-orange-500/10 border-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-default">GPU ACCELERATED</Badge>
                             </div>
                           </div>
                         </div>
@@ -247,7 +247,7 @@ const App: React.FC = () => {
                       )}
                     </div>
                   </ScrollArea>
-                  
+
                   {/* Floating Chat Input Overlay */}
                   <div className="absolute bottom-0 left-0 right-0 z-20 pointer-events-none bg-gradient-to-t from-white via-white/80 to-transparent pt-32 pb-8">
                     <div className="max-w-5xl mx-auto w-full px-8 pointer-events-auto">

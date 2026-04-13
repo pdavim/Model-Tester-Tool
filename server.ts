@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import fs from "node:fs";
-import { HfInference } from "@huggingface/inference";
+import { InferenceClient } from "@huggingface/inference";
 
 async function startServer() {
   const app = express();
@@ -212,23 +212,9 @@ async function startServer() {
     }
 
     try {
-      const hf = new HfInference(hfApiKey);
+      const client = new InferenceClient(hfApiKey);
       
-      // Use generic request for maximum flexibility with non-chat models
-      const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${hfApiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ inputs, parameters })
-      });
-
-      // We still use fetch here for generic inference because HfInference methods 
-      // are specialized, but we could use hf.request({ model, inputs, parameters })
-      // Let's use hf.request for consistency if possible, but keep the blob handling
-      
-      const result = await hf.request({
+      const result = await client.request({
         model,
         inputs,
         parameters,
@@ -248,7 +234,7 @@ async function startServer() {
     }
   });
 
-  // API Route for Hugging Face Proxy (Modern OpenAI-Compatible)
+  // API Route for Hugging Face Proxy (Modern OpenAI-Compatible with Fallback)
   app.post("/api/hf/chat", async (req, res) => {
     const { 
       model, 
@@ -264,15 +250,21 @@ async function startServer() {
       return res.status(400).json({ error: "Hugging Face API Key is required." });
     }
 
-    try {
-      const hf = new HfInference(hfApiKey);
+    const client = new InferenceClient(hfApiKey);
 
+    const tryChatCompletion = async (isFallback = false) => {
+      // If we are in fallback, we target the model specific endpoint directly
+      // but still use the chatCompletion API if the library handles it.
+      // However, usually we fallback to the model endpoint if the router fails.
+      
       if (stream) {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
+        if (!isFallback) {
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+        }
 
-        const chatStream = hf.chatCompletionStream({
+        const chatStream = client.chatCompletionStream({
           model,
           messages,
           max_tokens: max_tokens || 512,
@@ -286,7 +278,7 @@ async function startServer() {
         res.write('data: [DONE]\n\n');
         res.end();
       } else {
-        const response = await hf.chatCompletion({
+        const response = await client.chatCompletion({
           model,
           messages,
           max_tokens: max_tokens || 512,
@@ -295,21 +287,34 @@ async function startServer() {
         });
         res.json(response);
       }
-    } catch (error: any) {
-      console.error("Error proxying to Hugging Face:", error);
+    };
+
+    try {
+      // Primary attempt: Use optimized Inference Router
+      await tryChatCompletion(false);
+    } catch (primaryError: any) {
+      console.warn(`[HF Proxy] Primary (Router) failed for ${model}:`, primaryError.message);
       
-      const errorMsg = error.message || "";
-      if (errorMsg.includes("not a chat model")) {
-        return res.status(400).json({ 
-          error: { 
-            message: `The model '${model}' does not support the Chat Completions API. Please use an '-Instruct' or '-Chat' variant, or use the Generic Inference API for base models.` 
-          } 
+      try {
+        // Fallback attempt: Use standard Model specific endpoint
+        // NOTE: Standard endpoint might have different support, but InferenceClient handles normalization
+        await tryChatCompletion(true);
+      } catch (fallbackError: any) {
+        console.error(`[HF Proxy] Fallback failed for ${model}:`, fallbackError.message);
+        
+        const errorMsg = fallbackError.message || primaryError.message || "";
+        if (errorMsg.includes("not a chat model")) {
+          return res.status(400).json({ 
+            error: { 
+              message: `The model '${model}' does not support the Chat Completions API. Please use an '-Instruct' or '-Chat' variant, or use the Generic Inference API for base models.` 
+            } 
+          });
+        }
+
+        res.status(fallbackError.status || 500).json({ 
+          error: { message: `HF API Error: ${errorMsg}` } 
         });
       }
-
-      res.status(error.status || 500).json({ 
-        error: { message: error.message || "Failed to connect to Hugging Face" } 
-      });
     }
   });
 
