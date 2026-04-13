@@ -130,7 +130,7 @@ const App: React.FC = () => {
 
           <div className="flex-1 flex flex-col relative overflow-hidden">
             {testMode ? (
-              <TestBench selectedModels={[]} results={[]} isTesting={false} currentTestIndex={0} onRunTest={() => {}} onDownloadReport={() => {}} />
+              <TestBench />
             ) : (
               <>
                 <ScrollArea className="flex-1 bg-[#F8F9FA]">

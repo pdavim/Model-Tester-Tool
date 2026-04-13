@@ -30,14 +30,21 @@ import {
   Terminal, 
   Zap, 
   Clock, 
-  AlertCircle 
+  AlertCircle,
+  Sword,
+  Check
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useModelStore } from '@/store/useModelStore';
 import { useChatStore } from '@/store/useChatStore';
+import { useTestStore } from '@/store/useTestStore';
 import { toast } from 'sonner';
 
-export const ModelSelector: React.FC = () => {
+interface ModelSelectorProps {
+  mode?: 'chat' | 'test';
+}
+
+export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isAddingCustom, setIsAddingCustom] = React.useState(false);
   const [newCustomId, setNewCustomId] = React.useState('');
@@ -45,17 +52,17 @@ export const ModelSelector: React.FC = () => {
 
   const {
     models, customModels, favorites, hfHubModels,
-    isLoadingModels, isSearchingHub,
     searchQuery, selectedService, filterFree, filterPaid,
     filterModality, filterTags, filterProviders, filterFavorites,
     sortBy, sortOrder,
     setSearchQuery, setSelectedService, setFilterFree, setFilterPaid,
     setFilterModality, setFilterTags, setFilterProviders, setFilterFavorites,
     setSortBy, setSortOrder, clearFilters,
-    fetchModels, searchHFModels, addCustomModel, deleteCustomModel, toggleFavorite
+    fetchModels, addCustomModel, toggleFavorite
   } = useModelStore();
 
-  const { comparisonMode, comparisonModels, setComparisonModels } = useChatStore();
+  const { comparisonModels, setComparisonModels } = useChatStore();
+  const { testModels, addModelToTest, removeModelFromTest } = useTestStore();
 
   const allAvailableModels = [...models, ...customModels, ...hfHubModels];
 
@@ -92,9 +99,17 @@ export const ModelSelector: React.FC = () => {
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
-  const modalities = Array.from(new Set(allAvailableModels.map(m => m.architecture?.modality).filter(Boolean))) as string[];
-  const providersList = Array.from(new Set(allAvailableModels.map(m => m.id.includes('/') ? m.id.split('/')[0] : 'unknown').filter(Boolean))).sort() as string[];
-  const pipelineTagsList = Array.from(new Set(allAvailableModels.map(m => m.pipeline_tag).filter(Boolean))) as string[];
+  const handleSelectModel = (id: string) => {
+    if (mode === 'chat') {
+       // Single select logic - users can still use this to set the "active" model for single chat
+       // But usually in comparison mode they use multi-select.
+       // We'll keep it simple for now and only handle Battle Mode multi-select.
+       setIsOpen(false);
+    } else {
+       if (testModels.includes(id)) removeModelFromTest(id);
+       else addModelToTest(id);
+    }
+  };
 
   const handleAddCustom = () => {
     if (!newCustomId.trim()) return;
@@ -109,28 +124,37 @@ export const ModelSelector: React.FC = () => {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="w-full justify-between bg-gray-50 border-gray-200 hover:bg-gray-100 h-10 px-3">
-          <span className="truncate max-w-[200px]">Select Model</span>
-          <Sparkles className="w-4 h-4 text-orange-500 shrink-0" />
+          <span className="truncate max-w-[200px]">
+            {mode === 'test' ? `Selected (${testModels.length}) Models` : 'Select Model'}
+          </span>
+          {mode === 'test' ? <Sword className="w-4 h-4 text-orange-500 shrink-0" /> : <Sparkles className="w-4 h-4 text-orange-500 shrink-0" />}
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[80vw] max-w-[80vw] h-[80vh] flex flex-col p-0 overflow-hidden sm:max-w-[80vw]">
+      <DialogContent className="w-[80vw] max-w-[80vw] h-[85vh] flex flex-col p-0 overflow-hidden sm:max-w-[80vw]">
         <DialogHeader className="p-6 border-b border-gray-100">
           <div className="flex justify-between items-center">
             <div>
-              <DialogTitle className="text-2xl font-bold tracking-tight">Select Model</DialogTitle>
+              <DialogTitle className="text-2xl font-bold tracking-tight">
+                {mode === 'test' ? 'Battle Mode: Select Contenders' : 'Select Model'}
+              </DialogTitle>
               <DialogDescription>
-                Browse and filter through {allAvailableModels.length} available models.
+                {mode === 'test' ? 'Choose up to 10 models for the benchmarking battle.' : `Browse through ${allAvailableModels.length} available models.`}
               </DialogDescription>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setIsAddingCustom(!isAddingCustom)}
-              className={cn("gap-2", isAddingCustom && "bg-orange-50 border-orange-200 text-orange-600")}
-            >
-              <Plus className="w-4 h-4" />
-              Add Custom HF Model
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsAddingCustom(!isAddingCustom)}
+                className={cn("gap-2", isAddingCustom && "bg-orange-50 border-orange-200 text-orange-600")}
+              >
+                <Plus className="w-4 h-4" />
+                Add Custom HF Model
+              </Button>
+              {mode === 'test' && (
+                <Button size="sm" className="bg-orange-500" onClick={() => setIsOpen(false)}>Done</Button>
+              )}
+            </div>
           </div>
         </DialogHeader>
         
@@ -142,7 +166,7 @@ export const ModelSelector: React.FC = () => {
                 variant={selectedService === s ? 'default' : 'ghost'} 
                 size="sm" 
                 onClick={() => setSelectedService(s)}
-                className={cn("h-8 px-4 text-[11px] font-bold uppercase", selectedService === s && "bg-orange-500 hover:bg-orange-600")}
+                className={cn("h-8 px-4 text-[11px] font-bold uppercase", selectedService === s && "bg-black text-white px-6 shadow-md" )}
               >
                 {s === 'all' ? 'All Models' : s === 'openrouter' ? 'OpenRouter' : 'Hugging Face'}
               </Button>
@@ -191,7 +215,7 @@ export const ModelSelector: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <Label className="text-[10px] font-bold uppercase text-gray-400">Price & Favorites</Label>
+                <Label className="text-[10px] font-bold uppercase text-gray-400">Filters</Label>
                 <div className="space-y-2">
                   <div className="flex items-center space-x-2">
                     <Checkbox id="free" checked={filterFree} onCheckedChange={(v) => setFilterFree(!!v)} />
@@ -211,38 +235,47 @@ export const ModelSelector: React.FC = () => {
           </ScrollArea>
 
           <ScrollArea className="flex-1">
-            <div className="p-6 grid grid-cols-1 gap-4">
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredModels.length > 0 ? (
-                filteredModels.map((model) => (
-                  <div
-                    key={model.id}
-                    className={cn(
-                      "group relative flex flex-col items-start p-4 rounded-xl border transition-all hover:shadow-md",
-                      "border-gray-100 bg-white hover:border-orange-200"
-                    )}
-                  >
-                    <div className="flex justify-between items-start w-full mb-2">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => toggleFavorite(model.id)}>
-                          <Star className={cn("w-4 h-4", favorites.includes(model.id) ? "fill-yellow-400 text-yellow-400" : "text-gray-300")} />
-                        </button>
-                        <h4 className="font-bold text-sm">{model.name}</h4>
+                filteredModels.map((model) => {
+                  const isSelected = mode === 'test' ? testModels.includes(model.id) : false;
+                  return (
+                    <div
+                      key={model.id}
+                      onClick={() => handleSelectModel(model.id)}
+                      className={cn(
+                        "group relative flex flex-col items-start p-4 rounded-xl border transition-all cursor-pointer",
+                        isSelected 
+                          ? "border-orange-500 bg-orange-50 shadow-md ring-1 ring-orange-200" 
+                          : "border-gray-100 bg-white hover:border-orange-200 hover:shadow-sm"
+                      )}
+                    >
+                      <div className="flex justify-between items-start w-full mb-2">
+                        <div className="flex items-center gap-2">
+                          <button onClick={(e) => { e.stopPropagation(); toggleFavorite(model.id); }}>
+                            <Star className={cn("w-4 h-4", favorites.includes(model.id) ? "fill-yellow-400 text-yellow-400" : "text-gray-300")} />
+                          </button>
+                          <h4 className="font-bold text-sm truncate max-w-[150px]">{model.name}</h4>
+                        </div>
+                        <div className="flex items-center gap-1">
+                           {isSelected && <div className="bg-orange-500 rounded-full p-0.5"><Check className="w-3 h-3 text-white" /></div>}
+                           <Badge variant="secondary" className="text-[8px] font-bold">
+                             {model.id.split('/')[0].toUpperCase()}
+                           </Badge>
+                        </div>
                       </div>
-                      <Badge variant="secondary" className="text-[9px] font-bold">
-                        {model.provider?.toUpperCase()}
-                      </Badge>
+                      <p className="text-[11px] text-gray-500 line-clamp-2 h-8 leading-tight">{model.description || "No description available."}</p>
+                      <div className="mt-4 flex flex-col gap-3 w-full border-t border-gray-100/50 pt-3">
+                         <div className="flex items-center justify-between text-[9px] font-bold text-gray-400">
+                            <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {(model.context_length || 0).toLocaleString()} Context</span>
+                            {model.pricing && <span className="flex items-center gap-1"><Zap className="w-2.5 h-2.5" /> ${((parseFloat(model.pricing.prompt) || 0) * 1000000).toFixed(2)}</span>}
+                         </div>
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-500 line-clamp-2 h-8">{model.description || "No description available."}</p>
-                    <div className="mt-4 flex flex-col gap-3 w-full border-t border-gray-100 pt-3">
-                       <div className="flex items-center justify-between text-[10px] font-bold text-gray-400">
-                          <span>{(model.context_length || 0).toLocaleString()} Context</span>
-                          {model.pricing && <span>${(parseFloat(model.pricing.prompt) * 1000000).toFixed(2)} / 1M</span>}
-                       </div>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                <div className="col-span-2 flex flex-col items-center justify-center py-20 text-gray-400">
                   <AlertCircle className="w-12 h-12 mb-4 opacity-20" />
                   <p>No models found.</p>
                 </div>
