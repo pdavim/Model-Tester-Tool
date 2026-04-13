@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ApiService } from '@/services/api.service';
+import { detectModelService } from '@/lib/model-utils';
 import { Model } from '@/types';
 import { toast } from 'sonner';
 
@@ -79,8 +80,7 @@ export const useTestStore = create<TestState>()(
           }));
 
           try {
-            const isHF = modelId.includes('/') || !modelId.includes(':');
-            const endpoint = isHF ? '/api/hf/chat' : '/api/chat';
+            const { endpoint } = detectModelService(modelId);
             
             const payload = {
               model: modelId,
