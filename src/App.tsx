@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
+// Setup PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 import { 
   Send, 
   Settings2, 
@@ -36,7 +39,21 @@ import {
   Heart,
   Layers,
   Trash,
-  Database
+  Database,
+  Paperclip,
+  Image as ImageIcon,
+  File as FileIcon,
+  Video as VideoIcon,
+  X,
+  Play,
+  BarChart4,
+  Download,
+  Terminal,
+  Beaker,
+  ShieldCheck,
+  Activity,
+  Box,
+  BrainCircuit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -61,6 +78,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TestBench } from '@/components/TestBench';
+import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -96,7 +116,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
-import { Toaster, toast } from 'sonner';
+import { Toaster } from 'sonner';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -112,7 +132,18 @@ interface Message {
   error?: string;
   isLoading?: boolean;
   mediaUrl?: string;
-  mediaType?: 'audio' | 'video' | 'image';
+  mediaType?: 'audio' | 'video' | 'image' | 'pdf' | 'md';
+  attachments?: Attachment[];
+  rawResponse?: any;
+}
+
+interface Attachment {
+  id: string;
+  name: string;
+  type: 'image' | 'video' | 'pdf' | 'md';
+  url: string;
+  content?: string; // For text-based files like PDF/MD
+  base64?: string; // For images/video frames
 }
 
 interface ChatSession {
@@ -216,6 +247,99 @@ const CopyButton = ({ content }: { content: string }) => {
   );
 };
 
+// --- Multi-modal Helpers ---
+
+async function extractTextFromPDF(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = (textContent.items as any[]).map(item => item.str).join(" ");
+    fullText += pageText + "\n";
+  }
+  return fullText;
+}
+
+async function captureVideoFrames(file: File, frameCount: number = 3): Promise<string[]> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const frames: string[] = [];
+    
+    video.src = URL.createObjectURL(file);
+    video.muted = true;
+    video.play();
+    
+    video.onloadedmetadata = async () => {
+      const duration = video.duration;
+      for (let i = 0; i < frameCount; i++) {
+        const time = (duration / (frameCount + 1)) * (i + 1);
+        video.currentTime = time;
+        await new Promise(r => {
+          video.onseeked = () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frames.push(canvas.toDataURL('image/jpeg', 0.8));
+            r(true);
+          };
+        });
+      }
+      URL.revokeObjectURL(video.src);
+      resolve(frames);
+    };
+  });
+}
+
+const MOCK_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "get_weather",
+      description: "Get the current weather in a given location",
+      parameters: {
+        type: "object",
+        properties: {
+          location: { type: "string", description: "The city and state, e.g. San Francisco, CA" },
+          unit: { type: "string", enum: ["celsius", "fahrenheit"] }
+        },
+        required: ["location"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "calculate",
+      description: "Perform a mathematical calculation",
+      parameters: {
+        type: "object",
+        properties: {
+          expression: { type: "string", description: "The math expression to evaluate, e.g. '2 + 2 * (10 / 5)'" }
+        },
+        required: ["expression"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_web",
+      description: "Search the web for information",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The search query" }
+        },
+        required: ["query"]
+      }
+    }
+  }
+];
+
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -247,6 +371,18 @@ export default function App() {
   const [openRouterKey, setOpenRouterKey] = useState(() => localStorage.getItem('openrouter_api_key') || '');
   const [hfApiKey, setHfApiKey] = useState(() => localStorage.getItem('hf_api_key') || '');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  // Multi-modal state
+  const [selectedFiles, setSelectedFiles] = useState<Attachment[]>([]);
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
+  
+  // Test Mode state
+  const [testMode, setTestMode] = useState(false);
+  const [testModels, setTestModels] = useState<string[]>([]);
+  const [testResults, setTestResults] = useState<any[]>([]);
+  const [isTesting, setIsTesting] = useState(false);
+  const [currentTestIndex, setCurrentTestIndex] = useState(-1);
+  
   const [customModels, setCustomModels] = useState<Model[]>(() => {
     const saved = localStorage.getItem('custom_models');
     return saved ? JSON.parse(saved) : [];
@@ -265,6 +401,136 @@ export default function App() {
   const [hfHubModels, setHfHubModels] = useState<Model[]>([]);
   const [isSearchingHub, setIsSearchingHub] = useState(false);
   const [selectedService, setSelectedService] = useState<'all' | 'openrouter' | 'huggingface'>('all');
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setIsProcessingFiles(true);
+    const newAttachments: Attachment[] = [];
+    
+    for (const file of Array.from(files)) {
+      const id = Math.random().toString(36).substring(7);
+      const url = URL.createObjectURL(file);
+      
+      try {
+        if (file.type.startsWith('image/')) {
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+          newAttachments.push({ id, name: file.name, type: 'image', url, base64 });
+        } else if (file.type.startsWith('video/')) {
+          const frames = await captureVideoFrames(file);
+          newAttachments.push({ id, name: file.name, type: 'video', url, base64: frames[0] }); // Store first frame as preview
+        } else if (file.type === 'application/pdf') {
+          const content = await extractTextFromPDF(file);
+          newAttachments.push({ id, name: file.name, type: 'pdf', url, content });
+        } else if (file.name.endsWith('.md') || file.type === 'text/markdown') {
+          const content = await file.text();
+          newAttachments.push({ id, name: file.name, type: 'md', url, content });
+        } else {
+          toast.error(`Unsupported file type: ${file.name}`);
+        }
+      } catch (err) {
+        console.error(`Error processing ${file.name}:`, err);
+        toast.error(`Failed to process ${file.name}`);
+      }
+    }
+    
+    setSelectedFiles(prev => [...prev, ...newAttachments]);
+    setIsProcessingFiles(false);
+    if (e.target) e.target.value = '';
+  };
+
+  const removeAttachment = (id: string) => {
+    setSelectedFiles(prev => {
+      const file = prev.find(f => f.id === id);
+      if (file) URL.revokeObjectURL(file.url);
+      return prev.filter(f => f.id !== id);
+    });
+  };
+
+  const runTestBatch = async (prompt: string) => {
+    if (isTesting) return;
+    setIsTesting(true);
+    setTestResults(testModels.map(m => ({ model: m, latency: 0, tokens: 0, status: 'pending' })));
+    
+    for (let i = 0; i < testModels.length; i++) {
+      setCurrentTestIndex(i);
+      const modelId = testModels[i];
+      const startTime = Date.now();
+      
+      setTestResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'running' } : r));
+
+      try {
+        const payload = {
+          model: modelId,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          tools: MOCK_TOOLS, // Benchmarking tools
+          openRouterKey,
+          hfApiKey
+        };
+
+        const isHF = allAvailableModels.find(m => m.id === modelId)?.provider === 'huggingface';
+        const endpoint = isHF ? '/api/hf/chat' : '/api/chat';
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const latency = Date.now() - startTime;
+        const tokens = data.usage?.total_tokens || 0;
+        const content = data.choices?.[0]?.message?.content || data.generated_text || "No response";
+
+        setTestResults(prev => prev.map((r, idx) => idx === i ? { 
+          ...r, 
+          status: 'completed', 
+          latency, 
+          tokens, 
+          response: content,
+          usage: data.usage
+        } : r));
+      } catch (err) {
+        setTestResults(prev => prev.map((r, idx) => idx === i ? { 
+          ...r, 
+          status: 'error', 
+          error: err instanceof Error ? err.message : String(err) 
+        } : r));
+      }
+
+      // Safe Queue Cooldown
+      if (i < testModels.length - 1) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    
+    setIsTesting(false);
+    setCurrentTestIndex(-1);
+    toast.success('Test battle completed!');
+  };
+
+  const downloadTestReport = () => {
+    const reportData = {
+      timestamp: new Date().toISOString(),
+      modelsTested: testModels,
+      results: testResults
+    };
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mtt-report-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Report exported successfully');
+  };
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -632,203 +898,205 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (overridePrompt?: string, overrideModels?: string[]) => {
+    const messageContent = overridePrompt || input;
+    if (!messageContent.trim() || isLoading) return;
 
-    const userMessage: Message = { role: 'user', content: input };
+    // Process attachments for the current message
+    let processedContent: any = messageContent;
+    const currentAttachments = [...selectedFiles];
+    
+    // Inject document text into prompt if available
+    let docText = "";
+    currentAttachments.forEach(file => {
+      if ((file.type === 'pdf' || file.type === 'md') && file.content) {
+        docText += `\n\n[Content from ${file.name}]:\n${file.content}\n`;
+      }
+    });
+    
+    if (docText) {
+      processedContent = `${messageContent}\n${docText}`;
+    }
+
+    // Build multi-modal content array if there are images/video frames
+    const hasVisuals = currentAttachments.some(f => f.type === 'image' || f.type === 'video');
+    if (hasVisuals) {
+      const contentArray: any[] = [{ type: 'text', text: processedContent }];
+      currentAttachments.forEach(file => {
+        if (file.type === 'image' && file.base64) {
+          contentArray.push({ type: 'image_url', image_url: { url: file.base64 } });
+        } else if (file.type === 'video' && file.base64) {
+          // For video, we might have multiple frames in a real implementation, 
+          // but for now we'll handle the extracted frame as an image
+          contentArray.push({ type: 'image_url', image_url: { url: file.base64 } });
+        }
+      });
+      processedContent = contentArray;
+    }
+
+    const userMessage: Message = { 
+      role: 'user', 
+      content: typeof processedContent === 'string' ? processedContent : messageContent,
+      attachments: currentAttachments 
+    };
+    
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput('');
+    setSelectedFiles([]);
     setIsLoading(true);
 
-    const modelsToTest = comparisonMode && comparisonModels.length > 0 ? comparisonModels : [selectedModel];
-    const startTime = Date.now();
-
-    try {
-      const apiMessages = [
-        { role: 'system', content: systemPrompt },
-        ...newMessages.map(m => ({ role: m.role, content: m.content }))
-      ];
-
-      const promises = modelsToTest.map(async (modelId) => {
-        const modelInfo = allAvailableModels.find(m => m.id === modelId);
-        const isHF = modelInfo?.provider === 'huggingface' || customModels.some(m => m.id === modelId);
-        const pipeline = modelInfo?.pipeline_tag || '';
+    const modelsToTest = overrideModels || (comparisonMode && comparisonModels.length > 0 ? comparisonModels : [selectedModel]);
+    
+    // Safe Queue Execution (Sequential with Cooldown)
+    const runInSequence = async () => {
+      for (let i = 0; i < modelsToTest.map(m => m).length; i++) {
+        const modelId = modelsToTest[i];
+        const startTime = Date.now();
         
-        // Decide whether to use chat endpoint or generic inference
-        // conversational and text-generation (chat-like) use the v1/chat endpoint
-        const isChatModel = !pipeline || pipeline === 'conversational' || pipeline === 'text-generation';
-        const endpoint = isHF ? (isChatModel ? '/api/hf/chat' : '/api/hf/inference') : '/api/chat';
-        
-        const payload = isChatModel ? {
-            model: modelId,
-            messages: apiMessages,
-            temperature,
-            top_p: topP,
-            max_tokens: maxTokens,
-            frequency_penalty: frequencyPenalty,
-            presence_penalty: presencePenalty,
-            stream: stream,
-            openRouterKey: isHF ? undefined : openRouterKey,
-            hfApiKey: isHF ? hfApiKey : undefined
-          } : {
-            model: modelId,
-            inputs: input, // For non-chat, we just send the last input
-            hfApiKey,
-            parameters: {
+        try {
+          const apiMessages = [
+            { role: 'system', content: systemPrompt },
+            ...newMessages.map(m => ({ 
+              role: m.role, 
+              content: m.content === messageContent && m.role === 'user' ? processedContent : m.content 
+            }))
+          ];
+
+          const modelInfo = allAvailableModels.find(m => m.id === modelId);
+          const isHF = modelInfo?.provider === 'huggingface' || customModels.some(m => m.id === modelId);
+          const pipeline = modelInfo?.pipeline_tag || '';
+          
+          const isChatModel = !pipeline || pipeline === 'conversational' || pipeline === 'text-generation' || pipeline.includes('vision');
+          const endpoint = isHF ? (isChatModel ? '/api/hf/chat' : '/api/hf/inference') : '/api/chat';
+          
+          const payload = isChatModel ? {
+              model: modelId,
+              messages: apiMessages,
               temperature,
               top_p: topP,
-              max_new_tokens: maxTokens
-            }
-          };
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          const errorMessage: Message = {
-            role: 'assistant',
-            content: errorData.error?.message || `Failed to send message to ${modelId}`,
-            modelId,
-            error: 'true'
-          };
-          setMessages(prev => [...prev, errorMessage]);
-          return;
-        }
-
-        const contentType = response.headers.get('content-type');
-        
-        // Handle Media Responses
-        if (contentType && (contentType.includes('audio') || contentType.includes('video') || contentType.includes('image'))) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const type = contentType.includes('audio') ? 'audio' : contentType.includes('video') ? 'video' : 'image';
-          
-          const mediaMessage: Message = {
-            role: 'assistant',
-            content: `Generated ${type}`,
-            modelId,
-            mediaUrl: url,
-            mediaType: type as any,
-            responseTime: Date.now() - startTime
-          };
-          setMessages(prev => [...prev, mediaMessage]);
-          return;
-        }
-
-        // Handle Chat/Text Responses
-        if (stream && isChatModel) {
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-          let assistantContent = '';
-          
-          const assistantMessage: Message = {
-            role: 'assistant',
-            content: '',
-            modelId,
-            isLoading: true
-          };
-          
-          setMessages(prev => [...prev, assistantMessage]);
-
-          while (reader) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value);
-            const lines = chunk.split('\n').filter(line => line.trim() !== '');
-
-            for (const line of lines) {
-              const message = line.replace(/^data: /, '');
-              if (message === '[DONE]') break;
-
-              try {
-                const parsed = JSON.parse(message);
-                const content = parsed.choices[0]?.delta?.content || '';
-                assistantContent += content;
-                
-                setMessages(prev => {
-                  const updated = [...prev];
-                  const idx = updated.findLastIndex(m => m.role === 'assistant' && m.modelId === modelId && m.isLoading);
-                  if (idx !== -1) {
-                    updated[idx] = {
-                      ...updated[idx],
-                      content: assistantContent,
-                      usage: parsed.usage || updated[idx].usage,
-                    };
-                  }
-                  return updated;
-                });
-              } catch (e) {
-                // Ignore parse errors for partial chunks
+              max_tokens: maxTokens,
+              frequency_penalty: frequencyPenalty,
+              presence_penalty: presencePenalty,
+              stream: stream,
+              openRouterKey: isHF ? undefined : openRouterKey,
+              hfApiKey: isHF ? hfApiKey : undefined,
+              tools: testMode ? MOCK_TOOLS : undefined
+            } : {
+              model: modelId,
+              inputs: typeof processedContent === 'string' ? processedContent : messageContent,
+              hfApiKey,
+              parameters: {
+                temperature,
+                top_p: topP,
+                max_new_tokens: maxTokens
               }
-            }
-          }
-          
-          const endTime = Date.now();
-          setMessages(prev => {
-            const updated = [...prev];
-            const idx = updated.findLastIndex(m => m.role === 'assistant' && m.modelId === modelId && m.isLoading);
-            if (idx !== -1) {
-              updated[idx] = {
-                ...updated[idx],
-                isLoading: false,
-                responseTime: endTime - startTime,
-              };
-            }
-            return updated;
+            };
+
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
           });
 
-        } else {
-          const data = await response.json();
-          const endTime = Date.now();
-
-          if (data.error) {
+          if (!response.ok) {
+            const errorData = await response.json();
             const errorMessage: Message = {
               role: 'assistant',
-              content: data.error.message || 'An error occurred',
+              content: errorData.error?.message || `Failed to send message to ${modelId}`,
               modelId,
               error: 'true'
             };
             setMessages(prev => [...prev, errorMessage]);
-            return;
-          }
-
-          // Handle OpenAI format vs raw HF format
-          let content = '';
-          if (data.choices && data.choices[0]?.message) {
-            content = data.choices[0].message.content;
-          } else if (Array.isArray(data) && data[0]?.generated_text) {
-            content = data[0].generated_text;
-          } else if (data.generated_text) {
-            content = data.generated_text;
           } else {
-            content = JSON.stringify(data, null, 2);
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && (contentType.includes('audio') || contentType.includes('video') || contentType.includes('image'))) {
+              const blob = await response.blob();
+              const url = URL.createObjectURL(blob);
+              const type = contentType.includes('audio') ? 'audio' : contentType.includes('video') ? 'video' : 'image';
+              
+              const mediaMessage: Message = {
+                role: 'assistant',
+                content: `Generated ${type}`,
+                modelId,
+                mediaUrl: url,
+                mediaType: type as any,
+                responseTime: Date.now() - startTime
+              };
+              setMessages(prev => [...prev, mediaMessage]);
+            } else if (stream && isChatModel) {
+              const reader = response.body?.getReader();
+              const decoder = new TextDecoder();
+              let assistantContent = '';
+              
+              const assistantMessage: Message = { role: 'assistant', content: '', modelId, isLoading: true };
+              setMessages(prev => [...prev, assistantMessage]);
+
+              while (reader) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+                for (const line of lines) {
+                  const message = line.replace(/^data: /, '');
+                  if (message === '[DONE]') break;
+                  try {
+                    const parsed = JSON.parse(message);
+                    const content = parsed.choices[0]?.delta?.content || '';
+                    assistantContent += content;
+                    
+                    setMessages(prev => {
+                      const updated = [...prev];
+                      const idx = updated.findLastIndex(m => m.role === 'assistant' && m.modelId === modelId && m.isLoading);
+                      if (idx !== -1) {
+                        updated[idx] = {
+                          ...updated[idx],
+                          content: assistantContent,
+                          usage: parsed.usage || updated[idx].usage,
+                        };
+                      }
+                      return updated;
+                    });
+                  } catch (e) {}
+                }
+              }
+              
+              setMessages(prev => {
+                const updated = [...prev];
+                const idx = updated.findLastIndex(m => m.role === 'assistant' && m.modelId === modelId && m.isLoading);
+                if (idx !== -1) {
+                  updated[idx] = { ...updated[idx], isLoading: false, responseTime: Date.now() - startTime };
+                }
+                return updated;
+              });
+            } else {
+              const data = await response.json();
+              const assistantMessage: Message = {
+                role: 'assistant',
+                content: data.choices?.[0]?.message?.content || data.generated_text || JSON.stringify(data),
+                modelId,
+                usage: data.usage,
+                responseTime: Date.now() - startTime,
+                rawResponse: data
+              };
+              setMessages(prev => [...prev, assistantMessage]);
+            }
           }
-
-          const assistantMessage: Message = {
-            role: 'assistant',
-            content,
-            modelId,
-            usage: data.usage,
-            responseTime: endTime - startTime,
-          };
-
-          setMessages(prev => [...prev, assistantMessage]);
+        } catch (error) {
+          console.error(`Error with model ${modelId}:`, error);
         }
-      });
 
-      await Promise.all(promises);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to send message');
-    } finally {
+        // Safe Queue Cooldown
+        if (i < modelsToTest.length - 1) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
       setIsLoading(false);
-    }
+    };
+
+    runInSequence();
   };
 
   const clearChat = () => {
@@ -1252,18 +1520,21 @@ export default function App() {
                                     </Button>
                                   )}
                                   {comparisonMode && (
-                                    <Checkbox 
-                                      checked={comparisonModels.includes(model.id)}
-                                      onCheckedChange={(checked) => {
-                                        if (checked) {
-                                          if (comparisonModels.length < 6) setComparisonModels([...comparisonModels, model.id]);
-                                          else toast.error('Max 6 models for comparison');
-                                        } else {
-                                          setComparisonModels(comparisonModels.filter(m => m !== model.id));
-                                        }
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
+                                    <div className="flex items-center gap-2 mr-2">
+                                      <Label className="text-[10px] text-gray-400 font-bold uppercase">Compare</Label>
+                                      <Checkbox 
+                                        checked={comparisonModels.includes(model.id)}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            if (comparisonModels.length < 10) setComparisonModels([...comparisonModels, model.id]);
+                                            else toast.error('Max 10 models for comparison');
+                                          } else {
+                                            setComparisonModels(comparisonModels.filter(m => m !== model.id));
+                                          }
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </div>
                                   )}
                                   {model.pricing?.prompt === "0" && (
                                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none text-[10px]">FREE</Badge>
@@ -1286,54 +1557,40 @@ export default function App() {
                                   setIsModalOpen(false);
                                 }}
                               >
-                                <p className="text-xs text-gray-500 line-clamp-2 mb-3 h-8">
+                                <p className="text-xs text-gray-500 line-clamp-2 mb-4 h-8">
                                   {model.description || "No description available."}
                                 </p>
-                                <div className="flex items-center gap-4 w-full text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                  <div className="flex items-center gap-1">
-                                    <Zap className="w-3 h-3" />
-                                    {(model.context_length || 0).toLocaleString()} Context
-                                  </div>
-                                  {model.pricing && model.pricing.prompt !== "0" && (
-                                    <div className="flex items-center gap-1">
-                                      <Clock className="w-3 h-3" />
-                                      ${(parseFloat(model.pricing.prompt) * 1000000).toFixed(2)} / 1M
-                                    </div>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                  {model.architecture?.tokenizer && <Badge variant="outline" className="text-[9px] bg-gray-50 text-gray-400 border-gray-100">{model.architecture.tokenizer}</Badge>}
+                                  {model.pipeline_tag && <Badge variant="outline" className="text-[9px] bg-orange-50/50 text-orange-500 border-orange-100 font-medium">#{model.pipeline_tag}</Badge>}
+                                  {(model.pipeline_tag === 'conversational' || model.pipeline_tag === 'text-generation') && (
+                                     <Badge variant="outline" className="text-[9px] bg-green-50 text-green-600 border-green-100 flex gap-1 items-center">
+                                       <Terminal className="w-2 h-2" /> Tools Ready
+                                     </Badge>
                                   )}
                                 </div>
-                              </div>
-                              
-                              <Accordion type="single" collapsible className="w-full mt-2">
-                                <AccordionItem value="details" className="border-none">
-                                  <AccordionTrigger className="py-1 text-[10px] font-bold uppercase text-gray-400 hover:no-underline">
-                                    Detailed Information
-                                  </AccordionTrigger>
-                                  <AccordionContent className="text-[10px] text-gray-500 space-y-2 pt-2">
-                                    <div className="mb-2 p-1.5 bg-gray-50 rounded font-mono text-[9px] break-all border border-gray-100">
-                                      {model.id}
+                                
+                                <div className="flex flex-col gap-3 w-full">
+                                  <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                    <div className="flex items-center gap-1">
+                                      <Zap className="w-3 h-3" />
+                                      {(model.context_length || 0).toLocaleString()} Context
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className="space-y-1">
-                                        <p className="font-bold uppercase text-gray-400">Pricing (1M Tokens)</p>
-                                        <p>Prompt: ${(parseFloat(model.pricing?.prompt || "0") * 1000000).toFixed(2)}</p>
-                                        <p>Completion: ${(parseFloat(model.pricing?.completion || "0") * 1000000).toFixed(2)}</p>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <p className="font-bold uppercase text-gray-400">Architecture</p>
-                                        <p>Modality: {model.architecture?.modality || 'N/A'}</p>
-                                        <p>Tokenizer: {model.architecture?.tokenizer || 'N/A'}</p>
-                                      </div>
-                                    </div>
-                                    {model.top_provider && (
-                                      <div className="pt-2 border-t border-gray-100">
-                                        <p className="font-bold uppercase text-gray-400">Top Provider Features</p>
-                                        <p>Max Completion: {model.top_provider.max_completion_tokens?.toLocaleString() || 'N/A'}</p>
-                                        <p>Moderated: {model.top_provider.is_moderated ? 'Yes' : 'No'}</p>
+                                    {model.pricing && model.pricing.prompt !== "0" && (
+                                      <div className="flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        ${(parseFloat(model.pricing.prompt) * 1000000).toFixed(2)} / 1M
                                       </div>
                                     )}
-                                  </AccordionContent>
-                                </AccordionItem>
-                              </Accordion>
+                                  </div>
+                                  
+                                  <div className="pt-2 border-t border-gray-100">
+                                    <p className="text-[9px] text-gray-400 line-clamp-2 italic">
+                                      {model.description || "Found on Hub. Robust performance for generic tasks."}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           ))
                         ) : (
@@ -1623,168 +1880,292 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={fetchModels} className="text-gray-400 hover:text-orange-500 gap-2">
-              <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-              <span className="text-xs font-medium">Sync Models</span>
+          <div className="flex items-center gap-4">
+            <div className="flex bg-gray-100/50 p-1 rounded-xl border border-gray-200 shadow-sm">
+              <Button 
+                variant={!testMode ? "default" : "ghost"} 
+                size="sm" 
+                onClick={() => setTestMode(false)}
+                className={cn(
+                  "h-8 px-4 text-[10px] font-bold uppercase tracking-wider transition-all", 
+                  !testMode ? "bg-white text-orange-600 shadow-sm hover:bg-white" : "text-gray-500 hover:text-gray-900"
+                )}
+              >
+                Chat Analysis
+              </Button>
+              <Button 
+                variant={testMode ? "default" : "ghost"} 
+                size="sm" 
+                onClick={() => {
+                  setTestMode(true);
+                  if (testModels.length === 0 && comparisonModels.length > 0) {
+                    setTestModels(comparisonModels);
+                  }
+                }}
+                className={cn(
+                  "h-8 px-4 text-[10px] font-bold uppercase tracking-wider transition-all", 
+                  testMode ? "bg-white text-orange-600 shadow-sm hover:bg-white" : "text-gray-500 hover:text-gray-900"
+                )}
+              >
+                <Boxes className="w-3 h-3 mr-1.5" /> Battle Mode
+              </Button>
+            </div>
+            
+            <div className="h-6 w-px bg-gray-200 mx-2" />
+            
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={fetchModels} 
+              className={cn("text-gray-400 hover:text-orange-500 rounded-full", isLoading && "animate-spin")}
+              title="Sync Models"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </Button>
+
+            <Button variant="ghost" size="icon" className="text-gray-400 hover:text-orange-500 rounded-full" onClick={() => setIsSettingsOpen(true)}>
+              <Settings2 className="w-5 h-5" />
             </Button>
           </div>
         </header>
 
-        {/* Messages */}
-        <ScrollArea className="flex-1 bg-[#F8F9FA]" ref={scrollRef}>
-          <div className="max-w-4xl mx-auto p-8 space-y-8">
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
-                <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center">
-                  <Cpu className="w-10 h-10 text-orange-500" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-bold tracking-tight">Ready to test?</h3>
-                  <p className="text-gray-500 max-w-md mx-auto">
-                    Select a model from the sidebar, adjust your parameters, and start a conversation to see performance metrics.
-                  </p>
-                </div>
-              </div>
-            )}
+        {/* Main Content Area */}
+        {testMode ? (
+          <TestBench 
+            selectedModels={testModels}
+            results={testResults}
+            isTesting={isTesting}
+            currentTestIndex={currentTestIndex}
+            onRunTest={() => runTestBatch("Evaluate the reasoning capabilities of each model by solving: 'A man has 5 apples, he gives 2 to his son and 1 to his wife. How many apples does he have left?'")}
+            onDownloadReport={downloadTestReport}
+          />
+        ) : (
+          <>
+            {/* Messages */}
+            <ScrollArea className="flex-1 bg-[#F8F9FA]" ref={scrollRef}>
+              <div className="max-w-4xl mx-auto p-8 space-y-8">
+                {messages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
+                    <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center">
+                      <Cpu className="w-10 h-10 text-orange-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-bold tracking-tight">Ready to test?</h3>
+                      <p className="text-gray-500 max-w-md mx-auto">
+                        Select a model from the sidebar, attach files for multi-modal analysis, and start a conversation.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-            <AnimatePresence initial={false}>
-              {messages.map((msg, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={cn(
-                    "flex flex-col gap-3 group",
-                    msg.role === 'user' ? "items-end" : "items-start"
-                  )}
-                >
-                  <div className="flex items-start gap-2 max-w-[85%]">
-                    <div className={cn(
-                      "p-5 rounded-2xl shadow-sm text-sm leading-relaxed flex-1 max-h-[600px] overflow-y-auto",
-                      msg.role === 'user' 
-                        ? "bg-orange-500 text-white rounded-tr-none" 
-                        : "bg-white text-gray-800 border border-gray-100 rounded-tl-none"
-                    )}>
-                      {msg.modelId && (
-                        <div className="mb-2 flex items-center gap-2">
-                          <Badge variant="outline" className={cn(
-                            "text-[10px] font-mono",
-                            msg.role === 'user' ? "text-white border-white/30" : "text-gray-400 border-gray-100"
-                          )}>
-                            {msg.modelId}
-                          </Badge>
-                          {customModels.some(m => m.id === msg.modelId) && (
-                            <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-[9px]">HF Inference</Badge>
-                          )}
-                        </div>
+                <AnimatePresence initial={false}>
+                  {messages.map((msg, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={cn(
+                        "flex flex-col gap-3 group",
+                        msg.role === 'user' ? "items-end" : "items-start"
                       )}
-                      
-                      {msg.error ? (
-                        <div className="flex items-center gap-2 text-red-500 text-sm font-medium">
-                          <AlertTriangle className="w-4 h-4" />
-                          {msg.content}
+                    >
+                      <div className="flex items-start gap-2 max-w-[85%]">
+                        <div className={cn(
+                          "p-5 rounded-2xl shadow-sm text-sm leading-relaxed flex-1 max-h-[600px] overflow-y-auto",
+                          msg.role === 'user' 
+                            ? "bg-orange-500 text-white rounded-tr-none" 
+                            : "bg-white text-gray-800 border border-gray-100 rounded-tl-none"
+                        )}>
+                          {msg.modelId && (
+                            <div className="mb-2 flex items-center gap-2">
+                              <Badge variant="outline" className={cn(
+                                "text-[10px] font-mono",
+                                msg.role === 'user' ? "text-white border-white/30" : "text-gray-400 border-gray-100"
+                              )}>
+                                {msg.modelId}
+                              </Badge>
+                              {customModels.some(m => m.id === msg.modelId) && (
+                                <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-[9px]">HF Inference</Badge>
+                              )}
+                            </div>
+                          )}
+                          
+                          {msg.error ? (
+                            <div className="flex items-center gap-2 text-red-500 text-sm font-medium">
+                              <AlertTriangle className="w-4 h-4" />
+                              {msg.content}
+                            </div>
+                          ) : (
+                            <div className="space-y-4">
+                              <div className="whitespace-pre-wrap">
+                                {msg.content}
+                                {msg.isLoading && (
+                                  <span className="inline-flex ml-1">
+                                    <span className="animate-bounce">.</span>
+                                    <span className="animate-bounce [animation-delay:0.2s]">.</span>
+                                    <span className="animate-bounce [animation-delay:0.4s]">.</span>
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100/10">
+                                   {msg.attachments.map(att => (
+                                     <div key={att.id} className="flex items-center gap-1.5 bg-black/10 px-2 py-1 rounded text-[10px] backdrop-blur-sm">
+                                        <Paperclip className="w-3 h-3" /> {att.name}
+                                     </div>
+                                   ))}
+                                </div>
+                              )}
+
+                              {msg.mediaUrl && msg.mediaType === 'audio' && (
+                                <AudioMessage url={msg.mediaUrl} />
+                              )}
+                              
+                              {msg.mediaUrl && msg.mediaType === 'video' && (
+                                <VideoMessage url={msg.mediaUrl} />
+                              )}
+                              
+                              {msg.mediaUrl && msg.mediaType === 'image' && (
+                                <div className="mt-3 rounded-xl overflow-hidden border border-gray-100 shadow-sm">
+                                  <img src={msg.mediaUrl} alt="Generated" className="w-full h-auto" />
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <div className="whitespace-pre-wrap">
-                            {msg.content}
-                            {msg.isLoading && (
-                              <span className="inline-flex ml-1">
-                                <span className="animate-bounce">.</span>
-                                <span className="animate-bounce [animation-delay:0.2s]">.</span>
-                                <span className="animate-bounce [animation-delay:0.4s]">.</span>
-                              </span>
-                            )}
+                        {msg.role === 'assistant' && msg.content && (
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity pt-1">
+                            <CopyButton content={msg.content} />
                           </div>
-                          
-                          {msg.mediaUrl && msg.mediaType === 'audio' && (
-                            <AudioMessage url={msg.mediaUrl} />
+                        )}
+                      </div>
+
+                      {msg.role === 'assistant' && (msg.usage || msg.responseTime) && (
+                        <div className="flex items-center gap-4 px-1">
+                          {msg.usage && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                              <Zap className="w-3 h-3 text-orange-400" />
+                              <span>{msg.usage.total_tokens} tokens</span>
+                              <span className="opacity-50">({msg.usage.prompt_tokens}p / {msg.usage.completion_tokens}c)</span>
+                            </div>
                           )}
-                          
-                          {msg.mediaUrl && msg.mediaType === 'video' && (
-                            <VideoMessage url={msg.mediaUrl} />
-                          )}
-                          
-                          {msg.mediaUrl && msg.mediaType === 'image' && (
-                            <div className="mt-3 rounded-xl overflow-hidden border border-gray-100 shadow-sm">
-                              <img src={msg.mediaUrl} alt="Generated" className="w-full h-auto" />
+                          {msg.responseTime && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                              <Clock className="w-3 h-3 text-blue-400" />
+                              <span>{msg.responseTime}ms</span>
                             </div>
                           )}
                         </div>
                       )}
-                    </div>
-                    {msg.role === 'assistant' && msg.content && (
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity pt-1">
-                        <CopyButton content={msg.content} />
-                      </div>
-                    )}
-                  </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                <div ref={messagesEndRef} />
 
-                  {msg.role === 'assistant' && (msg.usage || msg.responseTime) && (
-                    <div className="flex items-center gap-4 px-1">
-                      {msg.usage && (
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                          <Zap className="w-3 h-3 text-orange-400" />
-                          <span>{msg.usage.total_tokens} tokens</span>
-                          <span className="opacity-50">({msg.usage.prompt_tokens}p / {msg.usage.completion_tokens}c)</span>
-                        </div>
-                      )}
-                      {msg.responseTime && (
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                          <Clock className="w-3 h-3 text-blue-400" />
-                          <span>{msg.responseTime}ms</span>
-                        </div>
-                      )}
+                {isLoading && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="w-8 h-8 bg-white border border-gray-100 rounded-full flex items-center justify-center shadow-sm">
+                      <RefreshCw className="w-4 h-4 text-orange-500 animate-spin" />
                     </div>
+                    <span className="text-xs font-medium text-gray-400 italic">Thinking...</span>
+                  </motion.div>
+                )}
+              </div>
+            </ScrollArea>
+
+            {/* Input Area */}
+            <div className="p-6 bg-white border-t border-gray-200">
+              <div className="max-w-4xl mx-auto space-y-4">
+                {/* Attachment Preview Tray */}
+                <AnimatePresence>
+                  {selectedFiles.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="flex flex-wrap gap-2 pb-2"
+                    >
+                      {selectedFiles.map((file) => (
+                        <div key={file.id} className="relative group bg-gray-50 border border-gray-200 rounded-lg p-2 pr-8 flex items-center gap-2">
+                           {file.type === 'image' ? <ImageIcon className="w-3 h-3 text-blue-500" /> :
+                            file.type === 'video' ? <VideoIcon className="w-3 h-3 text-purple-500" /> :
+                            file.type === 'pdf' ? <FileIcon className="w-3 h-3 text-red-500" /> :
+                            <FileIcon className="w-3 h-3 text-gray-500" />}
+                           <span className="text-[10px] font-medium truncate max-w-[120px]">{file.name}</span>
+                           <Button 
+                             variant="ghost" 
+                             size="icon" 
+                             className="h-5 w-5 absolute right-1 hover:text-red-500 rounded-md"
+                             onClick={() => removeAttachment(file.id)}
+                           >
+                             <X className="w-3 h-3" />
+                           </Button>
+                        </div>
+                      ))}
+                    </motion.div>
                   )}
-                </motion.div>
-              ))}
-            </AnimatePresence>
-            <div ref={messagesEndRef} />
+                </AnimatePresence>
 
-            {isLoading && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center gap-3"
-              >
-                <div className="w-8 h-8 bg-white border border-gray-100 rounded-full flex items-center justify-center shadow-sm">
-                  <RefreshCw className="w-4 h-4 text-orange-500 animate-spin" />
+                <div className="relative">
+                  <Textarea 
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder={isProcessingFiles ? "Processing your files..." : "Type your message here..."}
+                    disabled={isProcessingFiles}
+                    className="min-h-[100px] max-h-[300px] overflow-y-auto w-full pr-16 bg-gray-50 border-gray-200 focus:ring-orange-500 resize-none rounded-2xl p-4 text-sm shadow-inner"
+                  />
+                  <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                    <input 
+                      type="file" 
+                      multiple 
+                      id="file-upload" 
+                      className="hidden" 
+                      onChange={handleFileSelect}
+                      accept="image/*,video/mp4,application/pdf,.md,text/markdown"
+                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-gray-400 hover:text-orange-500 rounded-lg h-10 w-10 p-0"
+                          onClick={() => document.getElementById('file-upload')?.click()}
+                          disabled={isProcessingFiles}
+                        >
+                          {isProcessingFiles ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Attach Image, Video, PDF or MD</TooltipContent>
+                    </Tooltip>
+                    <Button 
+                      onClick={() => handleSend()}
+                      disabled={(!input.trim() && selectedFiles.length === 0) || isLoading || isProcessingFiles}
+                      className="bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-200 rounded-lg h-10 w-10 p-0"
+                    >
+                      <Send className="w-5 h-5 text-white" />
+                    </Button>
+                  </div>
                 </div>
-                <span className="text-xs font-medium text-gray-400 italic">Thinking...</span>
-              </motion.div>
-            )}
-          </div>
-        </ScrollArea>
-
-        {/* Input Area */}
-        <div className="p-6 bg-white border-t border-gray-200">
-          <div className="max-w-4xl mx-auto relative">
-            <Textarea 
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="Type your message here..."
-              className="min-h-[100px] max-h-[300px] overflow-y-auto w-full pr-16 bg-gray-50 border-gray-200 focus:ring-orange-500 resize-none rounded-xl p-4 text-sm"
-            />
-            <Button 
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-              className="absolute bottom-4 right-4 bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-200 rounded-lg h-10 w-10 p-0"
-            >
-              <Send className="w-5 h-5" />
-            </Button>
-          </div>
-          <p className="text-center text-[10px] text-gray-400 mt-4 font-medium uppercase tracking-widest">
-            Powered by OpenRouter API • Press Enter to send
-          </p>
-        </div>
+              </div>
+              <p className="text-center text-[10px] text-gray-400 mt-4 font-medium uppercase tracking-widest flex items-center justify-center gap-2">
+                <ShieldCheck className="w-3 h-3" />
+                Safe Analysis Mode Active • Press Enter to send
+              </p>
+            </div>
+          </>
+        )}
+      </div>
       </div>
     </div>
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
