@@ -219,7 +219,7 @@ const App: React.FC = () => {
                 <TestBench />
               ) : (
                 <div className="flex-1 relative flex flex-col overflow-hidden">
-                  <ScrollArea className="absolute inset-0 z-10">
+                  <ScrollArea className="flex-1 h-full w-full z-10">
                     <div className="max-w-5xl mx-auto px-8 py-12 pb-48 space-y-10">
                       {!currentSession || currentSession.messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-32 text-center animation-in fade-in zoom-in duration-700">
