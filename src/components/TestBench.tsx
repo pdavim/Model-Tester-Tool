@@ -301,7 +301,9 @@ export default function TestBench() {
                               {p.category}
                             </th>
                           ))}
-                          <th className="py-4 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-bold text-right">Overall</th>
+                          <th className="py-4 px-4 text-[9px] uppercase tracking-tighter text-gray-400 font-bold text-center border-l border-gray-100">Overall Score</th>
+                          <th className="py-4 px-4 text-[9px] uppercase tracking-tighter text-gray-400 font-bold text-center border-l border-gray-100">Total Time</th>
+                          <th className="py-4 px-4 text-[9px] uppercase tracking-tighter text-gray-400 font-bold text-center border-l border-gray-100">Total Tokens</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -335,10 +337,22 @@ export default function TestBench() {
                                 </td>
                               );
                             })}
-                            <td className="py-4 px-4 text-right">
-                               <div className="flex flex-col items-end">
+                            <td className="py-4 px-4 text-center border-l border-gray-50 bg-orange-50/10">
+                               <div className="flex flex-col items-center">
                                  <span className="text-xs font-bold text-orange-600">{res.overallLatency}ms</span>
                                  <span className="text-[9px] text-gray-400">{res.overallTokens} tokens</span>
+                               </div>
+                            </td>
+                            <td className="py-4 px-4 text-center border-l border-gray-50">
+                               <div className="flex flex-col items-center">
+                                 <span className="text-xs font-bold text-gray-900">{(res.overallLatency / 1000).toFixed(2)}s</span>
+                                 <span className="text-[9px] text-gray-400 uppercase tracking-widest scale-75">Total Time</span>
+                               </div>
+                            </td>
+                            <td className="py-4 px-4 text-center border-l border-gray-50">
+                               <div className="flex flex-col items-center">
+                                 <span className="text-xs font-bold text-gray-900">{res.overallTokens.toLocaleString()}</span>
+                                 <span className="text-[9px] text-gray-400 uppercase tracking-widest scale-75">Tokens</span>
                                </div>
                             </td>
                           </tr>
