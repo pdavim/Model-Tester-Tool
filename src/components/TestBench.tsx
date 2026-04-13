@@ -29,7 +29,12 @@ import {
   FileSearch,
   Trophy,
   History,
-  Clock
+  Clock,
+  Square,
+  AlertTriangle,
+  FileCode,
+  Braces,
+  Settings2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,11 +56,10 @@ import { useTestStore } from '@/store/useTestStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useModelStore } from '@/store/useModelStore';
 import { ModelSelector } from '@/components/modals/ModelSelector';
-import { BENCHMARK_PROMPTS } from '@/utils/benchmark-prompts';
+import { BENCHMARK_PROMPTS, BenchmarkPrompt } from '@/utils/benchmark-prompts';
 
 export default function TestBench() {
   const [activeTab, setActiveTab] = useState('overview');
-  const [customPrompt, setCustomPrompt] = useState('');
   
   const { 
     testModels, 
@@ -63,10 +67,12 @@ export default function TestBench() {
     isTesting, 
     isAnalyzing,
     currentTestIndex, 
+    currentStepIndex,
     battleAnalysis,
     runTestBatch,
     clearResults,
-    removeModelFromTest
+    removeModelFromTest,
+    stopBattle
   } = useTestStore();
 
   const { openRouterKey, hfApiKey } = useConfigStore();
@@ -74,19 +80,23 @@ export default function TestBench() {
 
   const allModels = [...models, ...customModels];
 
-  const chartData = testResults.filter(r => r.status === 'completed').map(r => ({
+  const chartData = testResults.filter(r => r.status === 'completed' || r.capabilities.some(c => c.status === 'completed')).map(r => ({
     name: r.model.split('/').pop() || r.model,
-    latency: r.latency,
-    tokens: r.tokens,
-    efficiency: r.latency > 0 ? (r.tokens / (r.latency / 1000)) : 0
+    latency: r.overallLatency,
+    tokens: r.overallTokens,
+    efficiency: r.overallLatency > 0 ? (r.overallTokens / (r.overallLatency / 1000)) : 0
   }));
 
-  const totalProgress = testModels.length > 0 
-    ? (testResults.filter(r => r.status === 'completed' || r.status === 'error').length / testModels.length) * 100 
-    : 0;
+  const totalSteps = testModels.length * BENCHMARK_PROMPTS.length;
+  const completedSteps = testResults.reduce((acc, r) => acc + r.capabilities.filter(c => c.status === 'completed' || c.status === 'error').length, 0);
+  const totalProgress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
-  const handleRunTest = (promptText: string) => {
-    runTestBatch(promptText, { openRouterKey, hfApiKey });
+  const handleRunFullAudit = () => {
+    runTestBatch(BENCHMARK_PROMPTS, { openRouterKey, hfApiKey });
+  };
+
+  const handleRunSinglePrompt = (prompt: BenchmarkPrompt) => {
+    runTestBatch([prompt], { openRouterKey, hfApiKey });
   };
 
   return (
@@ -104,7 +114,7 @@ export default function TestBench() {
               Model Battle Bench
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Sequential benchmarking and AI analysis via GLM-5.1
+              Multi-capability auditing & analytical benchmarking
             </p>
           </div>
           <div className="flex items-center gap-3 z-10">
@@ -115,11 +125,15 @@ export default function TestBench() {
                   Select Pro Prompt
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel>Expert Benchmarks</DropdownMenuLabel>
+              <DropdownMenuContent align="end" className="w-80 max-h-[400px] overflow-y-auto">
+                <DropdownMenuLabel>Individual Capability Tests</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {BENCHMARK_PROMPTS.map(p => (
-                  <DropdownMenuItem key={p.id} onClick={() => { setCustomPrompt(p.prompt); handleRunTest(p.prompt); }} className="flex flex-col items-start gap-1 p-3">
+                  <DropdownMenuItem 
+                    key={p.id} 
+                    onClick={() => handleRunSinglePrompt(p)} 
+                    className="flex flex-col items-start gap-1 p-3 cursor-pointer"
+                  >
                     <div className="flex items-center justify-between w-full">
                       <span className="font-bold text-xs">{p.title}</span>
                       <Badge variant="secondary" className="text-[9px] uppercase">{p.category}</Badge>
@@ -139,14 +153,24 @@ export default function TestBench() {
               Reset
             </Button>
             
-            <Button 
-              onClick={() => handleRunTest(customPrompt || BENCHMARK_PROMPTS[0].prompt)}
-              disabled={isTesting || testModels.length === 0}
-              className="bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-200 gap-2 min-w-[140px]"
-            >
-              {isTesting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              {isTesting ? 'In Battle...' : 'Start Battle'}
-            </Button>
+            {isTesting ? (
+              <Button 
+                onClick={stopBattle}
+                variant="destructive"
+                className="gap-2 shadow-lg min-w-[140px]"
+              >
+                <Square className="w-4 h-4 fill-white" />
+                Stop Battle
+              </Button>
+            ) : (
+              <Button 
+                onClick={handleRunFullAudit}
+                disabled={testModels.length === 0}
+                className="bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-200 gap-2 min-w-[140px]"
+              >
+                <Play className="w-4 h-4" /> Start Full Audit
+              </Button>
+            )}
           </div>
         </div>
 
@@ -162,7 +186,7 @@ export default function TestBench() {
               <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-orange-600">
                 <span className="flex items-center gap-2">
                   <RefreshCw className="w-3 h-3 animate-spin" />
-                  Analyzing {testModels[currentTestIndex]?.split('/').pop()}
+                  Testing {testModels[currentTestIndex]?.split('/').pop()} • {BENCHMARK_PROMPTS[currentStepIndex]?.category}
                 </span>
                 <span>{Math.round(totalProgress)}% Complete</span>
               </div>
@@ -215,7 +239,24 @@ export default function TestBench() {
                       </div>
                       <div className="flex items-center justify-between text-[9px] text-gray-400 px-1">
                         <span>{modelInfo?.context_length?.toLocaleString() || '---'} context</span>
-                        {result?.latency && <span className="font-mono text-orange-500">{result.latency}ms</span>}
+                        {result?.overallLatency && <span className="font-mono text-orange-500">{result.overallLatency}ms</span>}
+                      </div>
+
+                      {/* Mini capability tracker */}
+                      <div className="flex gap-1 mt-1">
+                        {result?.capabilities.map((c, cid) => (
+                          <div 
+                            key={cid} 
+                            className={cn(
+                              "h-1 flex-1 rounded-full",
+                              c.status === 'completed' ? "bg-green-400" :
+                              c.status === 'error' ? "bg-red-400" :
+                              c.status === 'running' ? "bg-orange-400 animate-pulse" :
+                              "bg-gray-100"
+                            )} 
+                            title={c.categoryName}
+                          />
+                        ))}
                       </div>
                     </div>
                   );
@@ -230,94 +271,86 @@ export default function TestBench() {
               <div className="flex items-center justify-between mb-2">
                 <TabsList className="bg-white border border-gray-100 w-fit">
                   <TabsTrigger value="overview" className="gap-2 text-xs uppercase tracking-widest font-bold">
-                    <LayoutDashboard className="w-3 h-3" /> Overview
+                    <LayoutDashboard className="w-3 h-3" /> Capability Matrix
                   </TabsTrigger>
                   <TabsTrigger value="analysis" className="gap-2 text-xs uppercase tracking-widest font-bold">
                     <Wand2 className="w-3 h-3" /> AI Report
                   </TabsTrigger>
                   <TabsTrigger value="responses" className="gap-2 text-xs uppercase tracking-widest font-bold">
-                    <Terminal className="w-3 h-3" /> Responses
+                    <Terminal className="w-3 h-3" /> Raw Samples
                   </TabsTrigger>
                 </TabsList>
                 
                 {battleAnalysis && (
-                  <Badge className="bg-green-100 text-green-700 border-green-200 animate-pulse">Report Ready</Badge>
+                  <Badge className="bg-green-100 text-green-700 border-green-200 animate-pulse">Deep Report Ready</Badge>
                 )}
               </div>
 
               <TabsContent value="overview" className="flex-1 mt-0 overflow-hidden">
-                <div className="grid grid-cols-2 gap-4 h-full overflow-y-auto pr-2 pb-4">
-                   <Card className="border-gray-100 shadow-sm">
-                     <CardHeader className="py-4">
-                       <div className="flex items-center justify-between">
-                         <CardTitle className="text-xs font-bold uppercase tracking-widest text-gray-400">Response Latency</CardTitle>
-                         <Zap className="w-4 h-4 text-red-400" />
-                       </div>
-                     </CardHeader>
-                     <CardContent className="h-64">
-                       <ResponsiveContainer width="100%" height="100%">
-                         <BarChart data={chartData}>
-                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                           <XAxis dataKey="name" fontSize={9} interval={0} tick={{ fill: '#9ca3af' }} />
-                           <YAxis fontSize={9} tick={{ fill: '#9ca3af' }} />
-                           <RechartsTooltip cursor={{fill: '#fef3c7'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
-                           <Bar dataKey="latency" fill="#f87171" radius={[6, 6, 0, 0]} barSize={40}>
-                              {chartData.map((_entry, index) => (
-                                <Cell key={`cell-${index}`} fill={index === 0 ? '#f87171' : '#fca5a5'} />
-                              ))}
-                           </Bar>
-                         </BarChart>
-                       </ResponsiveContainer>
-                     </CardContent>
-                   </Card>
-
-                   <Card className="border-gray-100 shadow-sm">
-                     <CardHeader className="py-4">
-                       <div className="flex items-center justify-between">
-                         <CardTitle className="text-xs font-bold uppercase tracking-widest text-gray-400">Throughput Efficiency (T/S)</CardTitle>
-                         <Activity className="w-4 h-4 text-blue-400" />
-                       </div>
-                     </CardHeader>
-                     <CardContent className="h-64">
-                       <ResponsiveContainer width="100%" height="100%">
-                         <LineChart data={chartData}>
-                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                           <XAxis dataKey="name" fontSize={9} interval={0} tick={{ fill: '#9ca3af' }} />
-                           <YAxis fontSize={9} tick={{ fill: '#9ca3af' }} />
-                           <RechartsTooltip />
-                           <Line type="monotone" dataKey="efficiency" stroke="#fb923c" strokeWidth={4} dot={{ fill: '#fb923c', r: 6, strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} />
-                         </LineChart>
-                       </ResponsiveContainer>
-                     </CardContent>
-                   </Card>
-
-                   <Card className="col-span-2 border-gray-100 shadow-sm bg-gradient-to-r from-white to-gray-50/50">
-                     <CardContent className="p-6 grid grid-cols-4 gap-6">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><Trophy className="w-3 h-3 text-yellow-500" /> Fastest</span>
-                          <span className="text-lg font-bold text-gray-900 truncate">
-                            {chartData.length > 0 ? [...chartData].sort((a,b) => a.latency - b.latency)[0].name : "---"}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-1 border-l border-gray-100 pl-6">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><Zap className="w-3 h-3 text-orange-500" /> Efficient</span>
-                          <span className="text-lg font-bold text-gray-900 truncate">
-                            {chartData.length > 0 ? [...chartData].sort((a,b) => b.efficiency - a.efficiency)[0].name : "---"}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-1 border-l border-gray-100 pl-6">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><BrainCircuit className="w-3 h-3 text-blue-500" /> Avg. Tokens</span>
-                          <span className="text-lg font-bold text-gray-900">
-                            {chartData.length > 0 ? Math.round(testResults.reduce((acc, r) => acc + (r.tokens || 0), 0) / chartData.length) : "0"}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-1 border-l border-gray-100 pl-6">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><History className="w-3 h-3 text-purple-500" /> Status</span>
-                          <Badge variant="outline" className="w-fit text-[10px] font-bold uppercase">{isTesting ? 'In Progress' : testResults.length > 0 ? 'Cycle Complete' : 'Idle'}</Badge>
-                        </div>
-                     </CardContent>
-                   </Card>
-                </div>
+                <ScrollArea className="h-full bg-white rounded-xl border border-gray-100 shadow-sm">
+                  <div className="p-6">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="py-4 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-bold">Contender</th>
+                          {BENCHMARK_PROMPTS.map(p => (
+                            <th key={p.id} className="py-4 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-bold text-center">
+                              {p.category}
+                            </th>
+                          ))}
+                          <th className="py-4 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-bold text-right">Overall</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {testResults.map(res => (
+                          <tr key={res.model} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                            <td className="py-4 px-4">
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold text-gray-900">{res.model.split('/').pop()}</span>
+                                <span className="text-[9px] text-gray-400">{res.model.split('/')[0]}</span>
+                              </div>
+                            </td>
+                            {BENCHMARK_PROMPTS.map(p => {
+                              const cap = res.capabilities.find(c => c.categoryId === p.id);
+                              return (
+                                <td key={p.id} className="py-4 px-4 text-center">
+                                  {cap?.status === 'completed' ? (
+                                    <div className="flex flex-col items-center">
+                                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                      <span className="text-[8px] font-mono mt-1 text-gray-400">{cap.latency}ms</span>
+                                    </div>
+                                  ) : cap?.status === 'error' ? (
+                                    <div className="flex flex-col items-center">
+                                      <Badge variant="outline" className="text-[8px] text-red-500 border-red-100 bg-red-50">FAIL</Badge>
+                                      <AlertTriangle className="w-3 h-3 text-red-400 mt-1" />
+                                    </div>
+                                  ) : cap?.status === 'running' ? (
+                                    <RefreshCw className="w-4 h-4 text-orange-500 animate-spin mx-auto" />
+                                  ) : (
+                                    <div className="w-1.5 h-1.5 rounded-full bg-gray-100 mx-auto" />
+                                  )}
+                                </td>
+                              );
+                            })}
+                            <td className="py-4 px-4 text-right">
+                               <div className="flex flex-col items-end">
+                                 <span className="text-xs font-bold text-orange-600">{res.overallLatency}ms</span>
+                                 <span className="text-[9px] text-gray-400">{res.overallTokens} tokens</span>
+                               </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    
+                    {testResults.length === 0 && (
+                      <div className="py-20 flex flex-col items-center justify-center text-gray-300">
+                        <Settings2 className="w-12 h-12 mb-4 opacity-20" />
+                        <p className="text-xs font-bold uppercase tracking-widest opacity-40">Ready for Audit</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
               </TabsContent>
 
               <TabsContent value="analysis" className="flex-1 mt-0 overflow-hidden">
@@ -330,15 +363,15 @@ export default function TestBench() {
                               <BrainCircuit className="w-6 h-6 text-orange-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                            </div>
                            <div className="text-center space-y-2">
-                              <h3 className="font-bold text-lg">GLM-5.1 is generating your report</h3>
-                              <p className="text-sm text-gray-400 animate-pulse">Analyzing logic, latency, and reasoning depth...</p>
+                              <h3 className="font-bold text-lg">GLM-5.1 Deep Audit</h3>
+                              <p className="text-sm text-gray-400 animate-pulse">Running comparative cross-analysis...</p>
                            </div>
                         </div>
                       ) : battleAnalysis ? (
                         <div className="prose prose-orange max-w-none">
                            <div className="flex items-center gap-3 mb-6 p-4 bg-orange-50 rounded-xl border border-orange-100">
-                              <Badge className="bg-orange-500">AI REPORT</Badge>
-                              <span className="text-xs font-bold text-orange-900 uppercase tracking-widest">Model Tester Intelligence Output</span>
+                              <Badge className="bg-orange-500">AUDIT SUMMARY</Badge>
+                              <span className="text-xs font-bold text-orange-900 uppercase tracking-widest">Global Model Performance Report</span>
                            </div>
                            <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-700">
                               {battleAnalysis}
@@ -347,8 +380,8 @@ export default function TestBench() {
                       ) : (
                         <div className="flex flex-col items-center justify-center py-20 text-gray-300 gap-4 opacity-50">
                            <FileSearch className="w-16 h-16" />
-                           <p className="text-sm font-bold uppercase tracking-widest">No Analysis Available</p>
-                           <p className="text-[10px] max-w-xs text-center uppercase tracking-widest">Reports are automatically generated by zai-org/GLM-5.1 after a battle finishes.</p>
+                           <p className="text-sm font-bold uppercase tracking-widest">No Audit Data</p>
+                           <p className="text-[10px] max-w-xs text-center uppercase tracking-widest">Complete a battle to see the AI comparison.</p>
                         </div>
                       )}
                    </div>
@@ -357,41 +390,41 @@ export default function TestBench() {
 
               <TabsContent value="responses" className="flex-1 mt-0 overflow-hidden">
                 <ScrollArea className="h-full bg-white rounded-xl border border-gray-100 shadow-sm">
-                  <div className="space-y-6 p-8">
-                    {testResults.filter(r => r.response || r.error).map(res => (
-                      <div key={res.model} className="space-y-4">
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                          <div className="flex items-center gap-3">
-                            <Badge className="bg-orange-500 rounded-lg px-3 py-1">{res.model}</Badge>
-                            <div className="h-4 w-[1px] bg-gray-200" />
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                               <Clock className="w-3 h-3 text-orange-300" /> {res.latency}ms
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-4">
-                             <div className="flex items-center gap-1 text-[11px] text-gray-500 font-bold">
-                               <Zap className="w-3 h-3 text-orange-400" /> {res.tokens} tokens
-                             </div>
-                             <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-orange-500">
-                               <Download className="w-3 h-3"/>
-                             </Button>
-                          </div>
+                  <div className="space-y-8 p-8">
+                    {testResults.map(res => (
+                      <div key={res.model} className="space-y-6">
+                        <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+                            <Badge className="bg-orange-500 rounded-lg px-4 py-1 font-black">{res.model.split('/').pop()}</Badge>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{res.model.split('/')[0]} Deployment</span>
                         </div>
-                        <div className={cn(
-                          "p-6 rounded-2xl text-xs leading-relaxed font-sans shadow-inner",
-                          res.error ? "bg-red-50 text-red-600 border border-red-100 font-bold" : "bg-gray-50 text-gray-700 border border-gray-100"
-                        )}>
-                          {res.error || res.response}
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {res.capabilities.filter(c => c.response || c.error).map(cap => (
+                            <div key={cap.categoryId} className="flex flex-col gap-2 p-4 rounded-xl border border-gray-50 bg-gray-50/30">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  {cap.categoryName === 'Coding' ? <FileCode className="w-3 h-3 text-blue-500" /> :
+                                   cap.categoryName === 'JSON' ? <Braces className="w-3 h-3 text-purple-500" /> :
+                                   <Zap className="w-3 h-3 text-orange-500" />}
+                                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-600">{cap.categoryName}</span>
+                                </div>
+                                <span className="text-[9px] font-mono text-gray-400">{cap.latency}ms</span>
+                              </div>
+                              <div className={cn(
+                                "p-3 rounded-lg text-[11px] leading-relaxed max-h-[150px] overflow-y-auto font-sans",
+                                cap.error ? "bg-red-50 text-red-600 border border-red-100" : "bg-white text-gray-700 border border-gray-100"
+                              )}>
+                                {cap.error || cap.response}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
                     {testResults.length === 0 && (
                       <div className="flex flex-col items-center justify-center py-20 text-gray-300 gap-6">
                         <Terminal className="w-16 h-16 opacity-20" />
-                        <div className="text-center space-y-1">
-                          <p className="text-sm font-bold uppercase tracking-widest opacity-40">Zero Signal</p>
-                          <p className="text-[10px] uppercase tracking-widest opacity-40">Start a battle to stream responses here.</p>
-                        </div>
+                        <p className="text-xs font-bold uppercase tracking-widest opacity-40">Awaiting Signal</p>
                       </div>
                     )}
                   </div>
@@ -406,7 +439,7 @@ export default function TestBench() {
            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                 <ShieldCheck className="w-4 h-4 text-green-500" />
-                Safe Queue V2 Active
+                Capability Audit Active (v2.0)
               </div>
               <div className="w-[1px] h-4 bg-gray-100" />
               <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
@@ -415,7 +448,7 @@ export default function TestBench() {
               </div>
            </div>
            <p className="text-[10px] text-gray-400 font-medium">
-             DESIGNED BY ANTIGRAVITY • V1.5.0
+             DESIGNED BY ANTIGRAVITY • V2.0.0
            </p>
         </div>
       </div>
