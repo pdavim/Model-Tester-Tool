@@ -1,47 +1,45 @@
+import * as React from "react"
 import { Slider as SliderPrimitive } from "@base-ui/react/slider"
-
 import { cn } from "@/lib/utils"
+
+interface SliderProps extends Omit<SliderPrimitive.Root.Props, 'value' | 'onValueChange'> {
+  value?: number[]
+  onValueChange?: (value: number[]) => void
+}
 
 function Slider({
   className,
-  defaultValue,
   value,
+  onValueChange,
   min = 0,
   max = 100,
+  step = 1,
   ...props
-}: SliderPrimitive.Root.Props) {
-  const _values = Array.isArray(value)
-    ? value
-    : Array.isArray(defaultValue)
-      ? defaultValue
-      : [min, max]
+}: SliderProps) {
+  // Base UI Slider works with an array of values
+  const internalValue = value || [min]
 
   return (
     <SliderPrimitive.Root
-      className={cn("data-horizontal:w-full data-vertical:h-full", className)}
-      data-slot="slider"
-      defaultValue={defaultValue}
-      value={value}
+      className={cn(
+        "relative flex w-full touch-none select-none items-center data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5 data-[orientation=vertical]:flex-col",
+        className
+      )}
+      value={internalValue}
+      onValueChange={onValueChange}
       min={min}
       max={max}
-      thumbAlignment="edge"
+      step={step}
       {...props}
     >
-      <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
-        <SliderPrimitive.Track
-          data-slot="slider-track"
-          className="relative grow overflow-hidden rounded-full bg-muted select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
-        >
-          <SliderPrimitive.Indicator
-            data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
-          />
+      <SliderPrimitive.Control className="relative flex w-full grow items-center data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5 data-[orientation=vertical]:flex-col">
+        <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-gray-100 data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5">
+          <SliderPrimitive.Indicator className="absolute h-full bg-orange-500 data-[orientation=vertical]:w-full" />
         </SliderPrimitive.Track>
-        {Array.from({ length: _values.length }, (_, index) => (
+        {internalValue.map((_, index) => (
           <SliderPrimitive.Thumb
-            data-slot="slider-thumb"
             key={index}
-            className="relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50"
+            className="block h-4 w-4 rounded-full border border-orange-200 bg-white ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:border-orange-500 cursor-grab active:cursor-grabbing shadow-sm"
           />
         ))}
       </SliderPrimitive.Control>

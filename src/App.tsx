@@ -55,21 +55,23 @@ const App: React.FC = () => {
         <Toaster position="top-right" expand={false} richColors />
 
         {/* Responsive Sidebar Container */}
-        <ChatSidebar />
+        {!testMode && <ChatSidebar />}
 
         <main className="flex-1 flex flex-col relative min-w-0 bg-[#FBFBFC]">
           {/* Main Header */}
           <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex items-center justify-between px-8 z-30 sticky top-0">
             <div className="flex items-center gap-6 overflow-hidden">
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-all rounded-xl"
-                >
-                  {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-                </Button>
+                {!testMode && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    className="text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-all rounded-xl"
+                  >
+                    {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                  </Button>
+                )}
 
                 <Sheet>
                   <SheetTrigger asChild>
