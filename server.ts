@@ -284,6 +284,17 @@ async function startServer() {
         }
         
         console.error(`HF API Error (${response.status}):`, errorData);
+
+        // Enhance error message for non-chat models
+        const errorMsg = errorData.error?.message || errorData.message || JSON.stringify(errorData);
+        if (errorMsg.includes("not a chat model")) {
+          return res.status(400).json({ 
+            error: { 
+              message: `The model '${model}' does not support the Chat Completions API. Please use an '-Instruct' or '-Chat' variant, or use the Generic Inference API for base models.` 
+            } 
+          });
+        }
+
         return res.status(response.status).json(errorData);
       }
 

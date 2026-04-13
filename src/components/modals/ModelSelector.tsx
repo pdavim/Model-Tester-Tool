@@ -60,7 +60,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
     setFilterModality, setFilterTags, setFilterProviders, setFilterFavorites,
     setSortBy, setSortOrder, clearFilters,
     fetchModels, searchHFModels, addCustomModel, toggleFavorite,
-    isSearchingHub
+    isSearchingHub,
+    setFilterProviders, setFilterTags
   } = useModelStore();
 
   const { sessions, currentSessionId, setSelectedModelForSession, comparisonModels, setComparisonModels } = useChatStore();
@@ -80,6 +81,23 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
   const sessionSelectedModel = currentSession?.parameters.selectedModel;
 
   const allAvailableModels = [...models, ...customModels, ...hfHubModels];
+
+  // Derive filter options
+  const creators = React.useMemo(() => {
+    const set = new Set<string>();
+    allAvailableModels.forEach(m => {
+      if (m.id.includes('/')) set.add(m.id.split('/')[0]);
+    });
+    return Array.from(set).sort();
+  }, [allAvailableModels]);
+
+  const tasks = React.useMemo(() => {
+    const set = new Set<string>();
+    allAvailableModels.forEach(m => {
+      if (m.pipeline_tag) set.add(m.pipeline_tag);
+    });
+    return Array.from(set).sort();
+  }, [allAvailableModels]);
 
   const filteredModels = allAvailableModels
     .filter((model, index, self) => index === self.findIndex((t) => t.id === model.id))
@@ -267,6 +285,62 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
                     <Label htmlFor="fav" className="text-sm font-bold text-gray-700">Curated Favorites</Label>
                     <Checkbox id="fav" checked={filterFavorites} onCheckedChange={(v) => setFilterFavorites(!!v)} className="h-5 w-5 rounded-lg border-gray-200" />
                   </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-black uppercase tracking-widest text-gray-400 leading-none">Intelligence Creators</Label>
+                  <Badge variant="ghost" className="text-[9px] font-black">{filterProviders.length || 'ALL'}</Badge>
+                </div>
+                <ScrollArea className="h-[180px] bg-white rounded-2xl border border-gray-50 p-2 shadow-inner">
+                  <div className="space-y-1">
+                    {creators.map(creator => (
+                      <div 
+                        key={creator}
+                        onClick={() => {
+                          const next = filterProviders.includes(creator) 
+                            ? filterProviders.filter(p => p !== creator) 
+                            : [...filterProviders, creator];
+                          setFilterProviders(next);
+                        }}
+                        className={cn(
+                          "flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-bold",
+                          filterProviders.includes(creator) ? "bg-orange-50 text-orange-600" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                        )}
+                      >
+                        <span className="truncate">{creator}</span>
+                        {filterProviders.includes(creator) && <Check className="w-3 h-3" />}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-black uppercase tracking-widest text-gray-400 leading-none">Model Core Task</Label>
+                  <Badge variant="ghost" className="text-[9px] font-black">{filterTags.length || 'ALL'}</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {tasks.map(tag => (
+                    <Badge 
+                      key={tag}
+                      variant={filterTags.includes(tag) ? 'default' : 'outline'}
+                      onClick={() => {
+                        const next = filterTags.includes(tag) 
+                          ? filterTags.filter(t => t !== tag) 
+                          : [...filterTags, tag];
+                        setFilterTags(next);
+                      }}
+                      className={cn(
+                        "cursor-pointer px-3 py-1.5 rounded-xl border-gray-100 text-[9px] font-black uppercase tracking-tighter transition-all",
+                        filterTags.includes(tag) ? "bg-gray-900 text-white shadow-lg scale-105" : "bg-white text-gray-400 hover:text-orange-500 hover:border-orange-100"
+                      )}
+                    >
+                      {tag.replace('-', ' ')}
+                    </Badge>
+                  ))}
                 </div>
               </div>
 

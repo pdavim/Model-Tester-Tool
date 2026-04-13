@@ -263,11 +263,21 @@ export const useChatStore = create<ChatState>()(
           try {
             // Precise service detection: Look up the model in the stores to determine the correct provider
             const { models, customModels, hfHubModels } = useModelStore.getState();
-            const allModels = [...models, ...customModels, ...hfHubModels];
-            const modelObj = allModels.find(m => m.id === modelId);
             
-            // Default to 'openrouter' if not found in HF lists, or use the explicit provider field
-            const isHF = modelObj?.provider === 'huggingface' || modelObj?.isCustom;
+            const findInList = (list: any[]) => list.find(m => m.id === modelId);
+            const orModel = findInList(models);
+            const customModel = findInList(customModels);
+            const hfHubModel = findInList(hfHubModels);
+            
+            // Priority: Explicit provider field -> Custom models -> Hub models -> Slash detection
+            let isHF = false;
+            if (customModel || hfHubModel || orModel?.provider === 'huggingface') {
+              isHF = true;
+            } else if (!orModel && modelId.includes('/') && !modelId.includes(':')) {
+              // If not in OpenRouter list and contains a slash (but not a port/protocol), assume HF
+              isHF = true;
+            }
+
             const endpoint = isHF ? '/api/hf/chat' : '/api/chat';
 
             const payload = {
