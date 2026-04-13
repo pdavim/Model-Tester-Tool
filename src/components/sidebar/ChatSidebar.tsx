@@ -90,16 +90,16 @@ export const ChatSidebar: React.FC = () => {
   const selectedModelId = currentSession?.parameters.selectedModel;
   const selectedModel = allModels.find(m => m.id === selectedModelId);
   
-  // Use session parameters or global defaults
-  const params = currentSession?.parameters || {
-    systemPrompt: defaultSystemPrompt,
-    temperature: defaultTemperature,
-    topP: defaultTopP,
-    maxTokens: defaultMaxTokens,
-    frequencyPenalty: defaultFreq,
-    presencePenalty: defaultPres,
-    selectedModel: '',
-    selectedService: 'all'
+  // Use session parameters or global defaults with absolute fallbacks
+  const params = {
+    systemPrompt: currentSession?.parameters?.systemPrompt ?? defaultSystemPrompt ?? 'You are a helpful AI assistant.',
+    temperature: currentSession?.parameters?.temperature ?? defaultTemperature ?? 0.7,
+    topP: currentSession?.parameters?.topP ?? defaultTopP ?? 1,
+    maxTokens: currentSession?.parameters?.maxTokens ?? defaultMaxTokens ?? 2048,
+    frequencyPenalty: currentSession?.parameters?.frequencyPenalty ?? defaultFreq ?? 0,
+    presencePenalty: currentSession?.parameters?.presencePenalty ?? defaultPres ?? 0,
+    selectedModel: currentSession?.parameters?.selectedModel ?? '',
+    selectedService: currentSession?.parameters?.selectedService ?? 'all'
   };
 
   const maxTokensLimit = selectedModel?.context_length || 4096;
@@ -257,7 +257,9 @@ export const ChatSidebar: React.FC = () => {
                       <Flame className="w-3.5 h-3.5 text-orange-500" />
                       <Label className="text-[10px] font-bold uppercase tracking-tight text-gray-500">Creativity</Label>
                     </div>
-                    <span className="text-[10px] font-black bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full border border-orange-100">{params.temperature}</span>
+                    <span className="text-[10px] font-black bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full border border-orange-100">
+                      {typeof params.temperature === 'number' ? params.temperature.toFixed(2) : '0.70'}
+                    </span>
                   </div>
                   <Slider 
                     value={[params.temperature]} 
@@ -275,7 +277,9 @@ export const ChatSidebar: React.FC = () => {
                       <Sparkles className="w-3.5 h-3.5 text-purple-500" />
                       <Label className="text-[10px] font-bold uppercase tracking-tight text-gray-500">Nucleus Sampling</Label>
                     </div>
-                    <span className="text-[10px] font-black bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full border border-purple-100">{params.topP}</span>
+                    <span className="text-[10px] font-black bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full border border-purple-100">
+                      {typeof params.topP === 'number' ? params.topP.toFixed(2) : '1.00'}
+                    </span>
                   </div>
                   <Slider 
                     value={[params.topP]} 

@@ -90,7 +90,8 @@ export const useChatStore = create<ChatState>()(
         }
         return { systemPrompt };
       }),
-      setTemperature: (temperature) => set((state) => {
+      setTemperature: (val) => set((state) => {
+        const temperature = typeof val === 'number' && !isNaN(val) ? val : 0.7;
         if (state.currentSessionId) {
           return {
             sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
@@ -100,7 +101,8 @@ export const useChatStore = create<ChatState>()(
         }
         return { temperature };
       }),
-      setTopP: (topP) => set((state) => {
+      setTopP: (val) => set((state) => {
+        const topP = typeof val === 'number' && !isNaN(val) ? val : 1;
         if (state.currentSessionId) {
           return {
             sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
@@ -110,7 +112,8 @@ export const useChatStore = create<ChatState>()(
         }
         return { topP };
       }),
-      setMaxTokens: (maxTokens) => set((state) => {
+      setMaxTokens: (val) => set((state) => {
+        const maxTokens = typeof val === 'number' && !isNaN(val) ? val : 2048;
         if (state.currentSessionId) {
           return {
             sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
@@ -120,7 +123,8 @@ export const useChatStore = create<ChatState>()(
         }
         return { maxTokens };
       }),
-      setFrequencyPenalty: (frequencyPenalty) => set((state) => {
+      setFrequencyPenalty: (val) => set((state) => {
+        const frequencyPenalty = typeof val === 'number' && !isNaN(val) ? val : 0;
         if (state.currentSessionId) {
           return {
             sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
@@ -130,7 +134,8 @@ export const useChatStore = create<ChatState>()(
         }
         return { frequencyPenalty };
       }),
-      setPresencePenalty: (presencePenalty) => set((state) => {
+      setPresencePenalty: (val) => set((state) => {
+        const presencePenalty = typeof val === 'number' && !isNaN(val) ? val : 0;
         if (state.currentSessionId) {
           return {
             sessions: state.sessions.map(s => s.id === state.currentSessionId ? {

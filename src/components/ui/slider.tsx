@@ -16,13 +16,19 @@ function Slider({
   step = 1,
   ...props
 }: SliderProps) {
-  // Base UI Slider works with an array of values
-  const internalValue = value || [min]
+  // CRITICAL FIX: Base UI error #31 requires a non-undefined value array for controlled inputs.
+  // We ensure internalValue is always a valid number array.
+  const internalValue = React.useMemo(() => {
+    if (!Array.isArray(value) || value.length === 0) return [min];
+    // Filter out NaN or undefined values that might have leaked from the store
+    const cleaned = value.map(v => (typeof v === 'number' && !isNaN(v)) ? v : min);
+    return cleaned;
+  }, [value, min]);
 
   return (
     <SliderPrimitive.Root
       className={cn(
-        "relative flex w-full touch-none select-none items-center data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5 data-[orientation=vertical]:flex-col",
+        "relative flex w-full touch-none select-none items-center h-5",
         className
       )}
       value={internalValue}
@@ -32,14 +38,26 @@ function Slider({
       step={step}
       {...props}
     >
-      <SliderPrimitive.Control className="relative flex w-full grow items-center data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5 data-[orientation=vertical]:flex-col">
-        <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-gray-100 data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5">
-          <SliderPrimitive.Indicator className="absolute h-full bg-orange-500 data-[orientation=vertical]:w-full" />
+      <SliderPrimitive.Control className="relative flex w-full grow items-center h-full">
+        {/* The target track - we remove overflow-hidden to ensure the thumb is never clipped */}
+        <SliderPrimitive.Track className="relative h-1.5 w-full grow rounded-full bg-gray-100 overflow-visible">
+          <SliderPrimitive.Indicator className="absolute h-full rounded-full bg-orange-500" />
         </SliderPrimitive.Track>
+        
+        {/* Render Thumbs based on the cleaned value array */}
         {internalValue.map((_, index) => (
           <SliderPrimitive.Thumb
             key={index}
-            className="block h-4 w-4 rounded-full border border-orange-200 bg-white ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:border-orange-500 cursor-grab active:cursor-grabbing shadow-sm"
+            className={cn(
+              "absolute block h-4 w-4 rounded-full border-2 border-orange-500 bg-white shadow-md transition-transform",
+              "hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2",
+              "cursor-grab active:cursor-grabbing z-10"
+            )}
+            style={{ 
+               // Ensure the thumb is centered relative to the track
+               top: '50%',
+               transform: 'translate(-50%, -50%)'
+            }}
           />
         ))}
       </SliderPrimitive.Control>
