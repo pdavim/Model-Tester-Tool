@@ -549,9 +549,23 @@ export default function App() {
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });
+  
+  useEffect(() => {
+    setFilterProviders([]);
+  }, [selectedService]);
 
   const modalities = Array.from(new Set(allModels.map(m => m.architecture?.modality).filter(Boolean))) as string[];
-  const providersList = Array.from(new Set(allModels.map(m => m.id.includes('/') ? m.id.split('/')[0] : 'unknown').filter(Boolean))).sort() as string[];
+  
+  const providersList = Array.from(new Set(
+    allModels
+      .filter(m => {
+        const service = m.provider || (m.isCustom ? 'huggingface' : 'openrouter');
+        return selectedService === 'all' || service === selectedService;
+      })
+      .map(m => m.id.includes('/') ? m.id.split('/')[0] : 'unknown')
+      .filter(Boolean)
+  )).sort() as string[];
+
   const pipelineTagsList = Array.from(new Set(allModels.map(m => m.pipeline_tag).filter(Boolean))) as string[];
 
   useEffect(() => {
@@ -637,7 +651,7 @@ export default function App() {
       ];
 
       const promises = modelsToTest.map(async (modelId) => {
-        const modelInfo = allModels.find(m => m.id === modelId);
+        const modelInfo = allAvailableModels.find(m => m.id === modelId);
         const isHF = modelInfo?.provider === 'huggingface' || customModels.some(m => m.id === modelId);
         const pipeline = modelInfo?.pipeline_tag || '';
         
@@ -1224,8 +1238,8 @@ export default function App() {
                                   {hfHubModels.some(hm => hm.id === model.id) && !customModels.some(cm => cm.id === model.id) && (
                                     <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-none text-[9px]">HF Hub</Badge>
                                   )}
-                                  <Badge variant="secondary" className="bg-gray-100 text-gray-600 border-none text-[9px] font-bold">
-                                    {model.isCustom || hfHubModels.some(hm => hm.id === model.id) ? 'HuggingFace' : 'OpenRouter'}
+                                  <Badge variant="secondary" className="bg-gray-100 text-gray-600 border-none text-[9px] font-bold uppercase tracking-wider">
+                                    {model.provider === 'huggingface' ? 'HuggingFace' : 'OpenRouter'}
                                   </Badge>
                                   {model.isCustom && (
                                     <Button 
@@ -1598,7 +1612,7 @@ export default function App() {
             </Sheet>
 
             <div className="flex flex-col">
-              <h1 className="font-bold text-sm tracking-tight">OpenRouter Tester</h1>
+              <h1 className="font-bold text-sm tracking-tight text-gray-900">Model Tester Tool</h1>
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">

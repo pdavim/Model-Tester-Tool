@@ -1,0 +1,9 @@
+FetchError: request to http://localhost:3767/api/hf/models failed, reason: connect ECONNREFUSED ::1:3767
+    at ClientRequest.<anonymous> (file:///C:/Users/pdavi/Desktop/DevProjects/Model-Tester-Tool/node_modules/node-fetch/src/index.js:108:11)
+    at ClientRequest.emit (node:events:524:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:512:5)
+    at Socket.emit (node:events:524:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
