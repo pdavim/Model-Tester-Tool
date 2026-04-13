@@ -24,7 +24,16 @@ async function startServer() {
 
   // API Route for OpenRouter Proxy
   app.post("/api/chat", async (req, res) => {
-    const { stream, openRouterKey, ...body } = req.body;
+    const { 
+      model, 
+      messages, 
+      temperature, 
+      top_p, 
+      max_tokens, 
+      stream, 
+      openRouterKey 
+    } = req.body;
+    
     const apiKey = openRouterKey;
     
     if (!apiKey) {
@@ -32,6 +41,15 @@ async function startServer() {
     }
 
     try {
+      const payload = {
+        model,
+        messages,
+        temperature,
+        top_p,
+        max_tokens,
+        stream: stream || false
+      };
+
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -40,7 +58,7 @@ async function startServer() {
           "X-Title": "OpenRouter Model Tester",
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ ...body, stream: stream || false })
+        body: JSON.stringify(payload)
       });
 
       if (stream) {
@@ -102,12 +120,12 @@ async function startServer() {
 
     try {
       console.log(`[HF Discovery] Fetching models (search: ${search || 'none'})`);
-      const hfKey = process.env.HF_KEY;
+      const hfKey = req.headers['x-hf-key'] as string || process.env.HF_KEY;
       const authHeader = hfKey ? { "Authorization": `Bearer ${hfKey}` } : {};
 
       if (search) {
-        // Dynamic search on HF Hub
-        const searchUrl = `https://huggingface.co/api/models?search=${encodeURIComponent(search as string)}&limit=50&sort=downloads&direction=-1&inference_provider=all`;
+        // Dynamic search on HF Hub - Broadened search (removed inference_provider restriction)
+        const searchUrl = `https://huggingface.co/api/models?search=${encodeURIComponent(search as string)}&limit=100&sort=downloads&direction=-1`;
         console.log(`[HF Discovery] Search URL: ${searchUrl}`);
         const response = await fetch(searchUrl, { headers: authHeader });
         const data = await response.json();
@@ -145,8 +163,8 @@ async function startServer() {
 
       const allModelsPromises = PIPELINE_TAGS.map(async (tag) => {
         try {
-          // Increase limit to 30 per tag for better default variety
-          const response = await fetch(`https://huggingface.co/api/models?pipeline_tag=${tag}&inference_provider=all&limit=30&sort=downloads&direction=-1`, {
+          // Broadened tag discovery: Remove inference_provider restriction to ensure more models appear
+          const response = await fetch(`https://huggingface.co/api/models?pipeline_tag=${tag}&limit=50&sort=downloads&direction=-1`, {
             headers: authHeader
           });
           const data = await response.json();

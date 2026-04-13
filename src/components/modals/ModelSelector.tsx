@@ -52,18 +52,23 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
   const [newCustomName, setNewCustomName] = React.useState('');
 
   const {
-    models, customModels, favorites, hfHubModels,
-    searchQuery, selectedService, filterFree, filterPaid,
-    filterModality, filterTags, filterProviders, filterFavorites,
-    sortBy, sortOrder,
-    setSearchQuery, setSelectedService, setFilterFree, setFilterPaid,
-    setFilterModality, setFilterTags, setFilterProviders, setFilterFavorites,
     setSortBy, setSortOrder, clearFilters,
-    fetchModels, addCustomModel, toggleFavorite
+    fetchModels, searchHFModels, addCustomModel, toggleFavorite,
+    isSearchingHub
   } = useModelStore();
 
   const { sessions, currentSessionId, setSelectedModelForSession, comparisonModels, setComparisonModels } = useChatStore();
   const { testModels, addModelToTest, removeModelFromTest } = useTestStore();
+
+  // Debounced Hub Search
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery.length >= 3) {
+        searchHFModels(searchQuery);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [searchQuery, searchHFModels]);
 
   const currentSession = sessions.find(s => s.id === currentSessionId);
   const sessionSelectedModel = currentSession?.parameters.selectedModel;
@@ -217,8 +222,18 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ mode = 'chat' }) =
               <div className="space-y-4">
                 <Label className="text-[11px] font-black uppercase tracking-widest text-gray-400 leading-none">Discovery</Label>
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input placeholder="Filter models..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-11 h-11 bg-white border-gray-100 rounded-xl shadow-sm focus:ring-orange-500/10" />
+                  <Search className={cn("absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors", isSearchingHub ? "text-orange-500 animate-spin" : "text-gray-400")} />
+                  <Input 
+                    placeholder="Search Hub..." 
+                    value={searchQuery} 
+                    onChange={e => setSearchQuery(e.target.value)} 
+                    className="pl-11 h-11 bg-white border-gray-100 rounded-xl shadow-sm focus:ring-orange-500/10" 
+                  />
+                  {isSearchingHub && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                       <span className="text-[10px] font-black text-orange-500 uppercase tracking-tighter animate-pulse">Syncing Hub...</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

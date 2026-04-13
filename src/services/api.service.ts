@@ -1,14 +1,16 @@
 import { Model, Message, Attachment } from '@/types';
 
 export class ApiService {
-  static async fetchModels(): Promise<Model[]> {
+  static async fetchModels(hfApiKey?: string): Promise<Model[]> {
     const orResponse = await fetch('/api/models');
     const orData = await orResponse.json();
     const orModels = (orData.data || []).map((m: any) => ({ ...m, provider: 'openrouter' }));
 
     let hfModels: Model[] = [];
     try {
-      const hfResponse = await fetch('/api/hf/models');
+      const hfResponse = await fetch('/api/hf/models', {
+        headers: hfApiKey ? { 'x-hf-key': hfApiKey } : {}
+      });
       if (hfResponse.ok) {
         hfModels = await hfResponse.json();
       }
@@ -19,10 +21,12 @@ export class ApiService {
     return [...orModels, ...hfModels];
   }
 
-  static async searchHFHub(query: string): Promise<Model[]> {
+  static async searchHFHub(query: string, hfApiKey?: string): Promise<Model[]> {
     if (!query.trim() || query.length < 3) return [];
     
-    const response = await fetch(`/api/hf/models?search=${encodeURIComponent(query)}`);
+    const response = await fetch(`/api/hf/models?search=${encodeURIComponent(query)}`, {
+      headers: hfApiKey ? { 'x-hf-key': hfApiKey } : {}
+    });
     if (response.ok) {
       return await response.json();
     }

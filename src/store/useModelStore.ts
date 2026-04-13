@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Model } from '@/types';
 import { ApiService } from '@/services/api.service';
+import { useConfigStore } from './useConfigStore';
 
 interface ModelState {
   models: Model[];
@@ -69,7 +70,8 @@ export const useModelStore = create<ModelState>()(
       fetchModels: async () => {
         set({ isLoadingModels: true });
         try {
-          const models = await ApiService.fetchModels();
+          const { hfApiKey } = useConfigStore.getState();
+          const models = await ApiService.fetchModels(hfApiKey);
           set({ models });
         } finally {
           set({ isLoadingModels: false });
@@ -79,7 +81,8 @@ export const useModelStore = create<ModelState>()(
       searchHFModels: async (query) => {
         set({ isSearchingHub: true });
         try {
-          const models = await ApiService.searchHFHub(query);
+          const { hfApiKey } = useConfigStore.getState();
+          const models = await ApiService.searchHFHub(query, hfApiKey);
           set({ hfHubModels: models });
         } finally {
           set({ isSearchingHub: false });
