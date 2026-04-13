@@ -218,9 +218,9 @@ const App: React.FC = () => {
               {testMode ? (
                 <TestBench />
               ) : (
-                <div className="flex-1 relative flex flex-col overflow-hidden">
-                  <ScrollArea className="flex-1 h-full w-full z-10">
-                    <div className="max-w-5xl mx-auto px-8 py-12 pb-48 space-y-10">
+                <div className="flex-1 relative overflow-hidden w-full h-full">
+                  <ScrollArea className="absolute inset-0 h-full w-full z-10">
+                    <div className="max-w-5xl mx-auto px-8 py-12 pb-60 space-y-10">
                       {!currentSession || currentSession.messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-32 text-center animation-in fade-in zoom-in duration-700">
                           <div className="relative mb-10">
@@ -249,11 +249,9 @@ const App: React.FC = () => {
                   </ScrollArea>
                   
                   {/* Floating Chat Input Overlay */}
-                  <div className="absolute bottom-0 left-0 right-0 z-20 pointer-events-none">
-                    <div className="max-w-5xl mx-auto w-full px-8 pb-10 pointer-events-auto">
-                      <div className="bg-white/40 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/20">
-                        <ChatInput />
-                      </div>
+                  <div className="absolute bottom-0 left-0 right-0 z-20 pointer-events-none bg-gradient-to-t from-white via-white/80 to-transparent pt-32 pb-8">
+                    <div className="max-w-5xl mx-auto w-full px-8 pointer-events-auto">
+                      <ChatInput />
                     </div>
                   </div>
                 </div>

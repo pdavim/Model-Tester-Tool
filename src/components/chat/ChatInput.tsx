@@ -54,7 +54,7 @@ export const ChatInput: React.FC = () => {
   };
 
   return (
-    <div className="bg-transparent p-2 relative group transition-all duration-500">
+    <div className="bg-white/60 backdrop-blur-2xl border border-white/60 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.1)] rounded-[2.5rem] p-2 relative group transition-all duration-500">
       <div className="flex flex-col w-full">
         {/* Attachment Preview Tray */}
         <AnimatePresence>
