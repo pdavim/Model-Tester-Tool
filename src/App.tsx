@@ -264,6 +264,7 @@ export default function App() {
   const [comparisonModels, setComparisonModels] = useState<string[]>([]);
   const [hfHubModels, setHfHubModels] = useState<Model[]>([]);
   const [isSearchingHub, setIsSearchingHub] = useState(false);
+  const [selectedService, setSelectedService] = useState<'all' | 'openrouter' | 'huggingface'>('all');
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -527,12 +528,15 @@ export default function App() {
                               (model.architecture?.modality && filterModality.includes(model.architecture.modality));
       const matchesFavorites = !filterFavorites || favorites.includes(model.id);
       
-      const provider = model.provider || (model.isCustom ? 'huggingface' : (model.id.includes('/') ? model.id.split('/')[0] : 'unknown'));
+      const service = model.provider || (model.isCustom ? 'huggingface' : 'openrouter');
+      const matchesService = selectedService === 'all' || service === selectedService;
+      
+      const provider = model.id.includes('/') ? model.id.split('/')[0] : 'unknown';
       const matchesProvider = filterProviders.length === 0 || filterProviders.includes(provider);
       
       const matchesTags = filterTags.length === 0 || (model.pipeline_tag && filterTags.includes(model.pipeline_tag));
 
-      return matchesSearch && matchesFree && matchesPaid && matchesModality && matchesFavorites && matchesProvider && matchesTags;
+      return matchesSearch && matchesFree && matchesPaid && matchesModality && matchesFavorites && matchesService && matchesProvider && matchesTags;
     })
     .sort((a, b) => {
       let comparison = 0;
@@ -547,7 +551,7 @@ export default function App() {
     });
 
   const modalities = Array.from(new Set(allModels.map(m => m.architecture?.modality).filter(Boolean))) as string[];
-  const providersList = Array.from(new Set(allModels.map(m => m.isCustom ? 'huggingface' : (m.id.includes('/') ? m.id.split('/')[0] : 'unknown')).filter(Boolean))).sort() as string[];
+  const providersList = Array.from(new Set(allModels.map(m => m.id.includes('/') ? m.id.split('/')[0] : 'unknown').filter(Boolean))).sort() as string[];
   const pipelineTagsList = Array.from(new Set(allModels.map(m => m.pipeline_tag).filter(Boolean))) as string[];
 
   useEffect(() => {
@@ -964,6 +968,35 @@ export default function App() {
                       </Button>
                     </div>
                   </DialogHeader>
+                  
+                  <div className="px-6 py-2 bg-gray-50/50 border-b border-gray-100 flex gap-4">
+                    <div className="flex bg-white border border-gray-200 p-1 rounded-lg">
+                      <Button 
+                        variant={selectedService === 'all' ? 'default' : 'ghost'} 
+                        size="sm" 
+                        onClick={() => setSelectedService('all')}
+                        className={cn("h-8 px-4 text-[11px] font-bold uppercase", selectedService === 'all' && "bg-orange-500 hover:bg-orange-600")}
+                      >
+                        All Models
+                      </Button>
+                      <Button 
+                        variant={selectedService === 'openrouter' ? 'default' : 'ghost'} 
+                        size="sm" 
+                        onClick={() => setSelectedService('openrouter')}
+                        className={cn("h-8 px-4 text-[11px] font-bold uppercase", selectedService === 'openrouter' && "bg-orange-500 hover:bg-orange-600")}
+                      >
+                        OpenRouter
+                      </Button>
+                      <Button 
+                        variant={selectedService === 'huggingface' ? 'default' : 'ghost'} 
+                        size="sm" 
+                        onClick={() => setSelectedService('huggingface')}
+                        className={cn("h-8 px-4 text-[11px] font-bold uppercase", selectedService === 'huggingface' && "bg-orange-500 hover:bg-orange-600")}
+                      >
+                        Hugging Face
+                      </Button>
+                    </div>
+                  </div>
 
                   {isAddingCustom && (
                     <div className="p-4 bg-orange-50 border-b border-orange-100 flex gap-4 items-end animate-in slide-in-from-top duration-200">

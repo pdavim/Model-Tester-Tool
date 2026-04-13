@@ -100,14 +100,17 @@ async function startServer() {
     }
 
     try {
+      console.log(`[HF Discovery] Fetching models (search: ${search || 'none'})`);
       const hfKey = process.env.HF_KEY;
       const authHeader = hfKey ? { "Authorization": `Bearer ${hfKey}` } : {};
 
       if (search) {
         // Dynamic search on HF Hub
         const searchUrl = `https://huggingface.co/api/models?search=${encodeURIComponent(search as string)}&limit=50&sort=downloads&direction=-1&inference_provider=all`;
+        console.log(`[HF Discovery] Search URL: ${searchUrl}`);
         const response = await fetch(searchUrl, { headers: authHeader });
         const data = await response.json();
+        console.log(`[HF Discovery] Found ${data.length} models for query "${search}"`);
         
         const searchResults = data.map((m: any) => ({
           id: m.id,
@@ -169,6 +172,7 @@ async function startServer() {
       
       // Deduplicate by ID
       const uniqueModels = Array.from(new Map(flattenedModels.map(m => [m.id, m])).values());
+      console.log(`[HF Discovery] Discovery complete. Total unique models: ${uniqueModels.length}`);
 
       hfModelsCache = uniqueModels;
       lastHfFetch = now;
