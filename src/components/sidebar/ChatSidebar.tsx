@@ -126,12 +126,12 @@ export const ChatSidebar: React.FC = () => {
   return (
     <motion.div 
       initial={false}
-      animate={{ width: sidebarOpen ? 320 : 0, opacity: sidebarOpen ? 1 : 0 }}
+      animate={{ width: sidebarOpen ? 280 : 0, opacity: sidebarOpen ? 1 : 0 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       className="h-full bg-white border-r border-gray-100 overflow-hidden flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20"
     >
       {/* Header */}
-      <div className="p-8 flex items-center justify-between border-b border-gray-50 bg-gradient-to-b from-gray-50/50 to-transparent">
+      <div className="p-6 flex items-center justify-between border-b border-gray-50 bg-gradient-to-b from-gray-50/50 to-transparent">
         <div className="flex items-center gap-3">
           <div className="bg-orange-500 p-2 rounded-xl shadow-lg shadow-orange-500/20">
             <Gauge className="w-5 h-5 text-white" />
@@ -186,7 +186,7 @@ export const ChatSidebar: React.FC = () => {
       </div>
 
       <ScrollArea className="flex-1 min-h-0 no-scrollbar">
-        <div className="p-8 space-y-10">
+        <div className="p-6 space-y-6">
           
           {/* Model Selection - Targeting Interface */}
           {!comparisonMode && (
@@ -412,10 +412,10 @@ export const ChatSidebar: React.FC = () => {
       </ScrollArea>
 
       {/* Footer Actions */}
-      <div className="p-8 border-t border-gray-50 bg-gray-50/20">
+      <div className="p-6 border-t border-gray-50 bg-gray-50/20">
         <Button 
           variant="outline" 
-          className="w-full h-12 gap-3 rounded-2xl font-black text-xs uppercase tracking-widest border-gray-100 bg-white hover:bg-red-50 hover:text-red-500 hover:border-red-100 shadow-sm transition-all duration-300"
+          className="w-full h-10 gap-3 rounded-2xl font-black text-xs uppercase tracking-widest border-gray-100 bg-white hover:bg-red-50 hover:text-red-500 hover:border-red-100 shadow-sm transition-all duration-300"
           onClick={clearChat}
         >
           <Trash2 className="w-4 h-4" /> Purge Session

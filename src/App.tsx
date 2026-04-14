@@ -61,7 +61,7 @@ const App: React.FC = () => {
 
         <main className="flex-1 flex flex-col relative min-w-0 bg-[#FBFBFC]">
           {/* Main Header */}
-          <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex items-center justify-between px-8 z-30 sticky top-0">
+          <header className="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex items-center justify-between px-6 z-30 sticky top-0">
             <div className="flex items-center gap-6 overflow-hidden">
               <div className="flex items-center gap-2">
                 {!testMode && (
@@ -87,8 +87,8 @@ const App: React.FC = () => {
 
                   <div className="w-[1px] h-6 bg-gray-100 mx-2" />
 
-                  <SheetContent side="left" className="w-[380px] p-0 flex flex-col border-none shadow-2xl">
-                    <SheetHeader className="p-8 border-b border-gray-50 bg-gray-50/50">
+                  <SheetContent side="left" className="w-[320px] p-0 flex flex-col border-none shadow-2xl">
+                    <SheetHeader className="p-6 border-b border-gray-50 bg-gray-50/50">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <History className="w-5 h-5 text-gray-400" />
@@ -192,7 +192,7 @@ const App: React.FC = () => {
           <div className="flex-1 flex flex-col relative overflow-hidden">
             {/* Session Status Bar (Responsive) */}
             {!testMode && (
-              <div className="bg-white px-8 py-3 border-b border-gray-50 flex items-center justify-between z-20 overflow-x-auto no-scrollbar">
+              <div className="bg-white px-6 py-2 border-b border-gray-50 flex items-center justify-between z-20 overflow-x-auto no-scrollbar">
                 <div className="flex items-center gap-8 min-w-max">
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Active Model</span>
@@ -230,7 +230,7 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex-1 relative overflow-hidden w-full h-full">
                   <ScrollArea className="absolute inset-0 h-full w-full z-10">
-                    <div className="max-w-5xl mx-auto px-8 py-12 pb-60 space-y-10">
+                    <div className="max-w-5xl mx-auto px-6 py-8 pb-48 space-y-8">
                       {!currentSession || currentSession.messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-32 text-center animation-in fade-in zoom-in duration-700">
                           <div className="relative mb-10">

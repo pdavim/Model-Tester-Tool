@@ -272,14 +272,14 @@ export default function TestBench() {
           <div className="flex-1 flex flex-col gap-6 overflow-hidden">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
               <div className="flex items-center justify-between mb-2">
-                <TabsList className="bg-white border border-gray-100 w-fit">
-                  <TabsTrigger value="overview" className="gap-2 text-xs uppercase tracking-widest font-bold">
+                <TabsList className="bg-white border border-gray-100 w-fit p-1 rounded-lg">
+                  <TabsTrigger value="overview" className="gap-2 text-[9px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-md">
                     <LayoutDashboard className="w-3 h-3" /> Capability Matrix
                   </TabsTrigger>
-                  <TabsTrigger value="analysis" className="gap-2 text-xs uppercase tracking-widest font-bold">
+                  <TabsTrigger value="analysis" className="gap-2 text-[9px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-md">
                     <Wand2 className="w-3 h-3" /> AI Report
                   </TabsTrigger>
-                  <TabsTrigger value="responses" className="gap-2 text-xs uppercase tracking-widest font-bold">
+                  <TabsTrigger value="responses" className="gap-2 text-[9px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-md">
                     <Terminal className="w-3 h-3" /> Raw Samples
                   </TabsTrigger>
                 </TabsList>
@@ -291,17 +291,17 @@ export default function TestBench() {
 
               <TabsContent value="overview" className="flex-1 mt-0 overflow-hidden">
                 <ScrollArea className="h-full bg-white rounded-xl border border-gray-100 shadow-sm">
-                  <div className="p-6">
+                  <div className="p-4">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-gray-100">
-                          <th className="py-4 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-bold">Contender</th>
+                          <th className="py-3 px-4 text-[9px] uppercase tracking-widest text-gray-400 font-bold">Contender</th>
                           {BENCHMARK_PROMPTS.map(p => (
-                            <th key={p.id} className="py-4 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-bold text-center">
+                            <th key={p.id} className="py-3 px-4 text-[9px] uppercase tracking-widest text-gray-400 font-bold text-center">
                               {p.category}
                             </th>
                           ))}
-                          <th className="py-4 px-4 text-[9px] uppercase tracking-tighter text-gray-400 font-bold text-center border-l border-gray-100">Overall Score</th>
+                          <th className="py-3 px-4 text-[8px] uppercase tracking-tighter text-gray-400 font-bold text-center border-l border-gray-100">Overall Score</th>
                           <th className="py-4 px-4 text-[9px] uppercase tracking-tighter text-gray-400 font-bold text-center border-l border-gray-100">Total Time</th>
                           <th className="py-4 px-4 text-[9px] uppercase tracking-tighter text-gray-400 font-bold text-center border-l border-gray-100">Total Tokens</th>
                         </tr>
