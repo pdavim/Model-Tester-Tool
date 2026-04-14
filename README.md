@@ -1,12 +1,12 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/pdavim/Model-Tester-Tool/blob/main/public/model-test-tool-battle.png" />
 </div>
 
-# Run and deploy your AI Studio app
+# Run and deploy MODEL TEST TOOL
 
 This contains everything you need to run your app locally.
 
-View your app in AI Studio: https://ai.studio/apps/64565575-35e3-4e42-b1d8-78652072667e
+View your app in: https://model-tool.innovaive.com
 
 ## Run Locally
 
