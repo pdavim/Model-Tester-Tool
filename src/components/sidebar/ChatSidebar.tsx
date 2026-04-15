@@ -110,10 +110,6 @@ export const ChatSidebar: React.FC = () => {
 
   const maxTokensLimit = selectedModel?.context_length || 4096;
 
-      toast.success('Preset saved');
-    }
-  };
-
   const handleSavePreset = () => {
     const name = prompt('Enter preset name:');
     if (name) {
