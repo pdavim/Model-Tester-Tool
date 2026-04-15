@@ -6,6 +6,8 @@ import { Logger } from '../../infra/Logging';
 
 export class WebSocketGateway {
   private wss: WebSocketServer;
+  private messageCounts: Map<WebSocket, { count: number; lastReset: number }> = new Map();
+  private readonly MAX_MESSAGES_PER_MIN = 10;
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ server, path: '/ws/chat' });
@@ -17,6 +19,23 @@ export class WebSocketGateway {
       Logger.info('New WebSocket connection established');
 
       ws.on('message', async (data: string) => {
+        // Rate Limiting Logic
+        const now = Date.now();
+        const clientStats = this.messageCounts.get(ws) || { count: 0, lastReset: now };
+        
+        if (now - clientStats.lastReset > 60000) {
+          clientStats.count = 1;
+          clientStats.lastReset = now;
+        } else {
+          clientStats.count++;
+        }
+        this.messageCounts.set(ws, clientStats);
+
+        if (clientStats.count > this.MAX_MESSAGES_PER_MIN) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Rate limit exceeded. Max 10 messages per minute.' }));
+          return;
+        }
+
         try {
           const payload = JSON.parse(data.toString());
           
@@ -28,10 +47,11 @@ export class WebSocketGateway {
           // Set up AbortController for this specific WS request
           const abortController = new AbortController();
           
-          ws.on('close', () => {
-            abortController.abort();
-            Logger.info('WS Connection closed, aborting stream');
-          });
+      ws.on('close', () => {
+        abortController.abort();
+        this.messageCounts.delete(ws);
+        Logger.info('WS Connection closed, aborting stream');
+      });
 
           const response = await ChatService.handleChat(validatedPayload, {
             signal: abortController.signal

@@ -11,7 +11,8 @@ import morgan from 'morgan';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 
-// Shared and Infra
+// Shared, Infra, and Config
+import { config } from './src/config/env';
 import { Logger, logStream } from './src/infra/Logging';
 import { requestIdMiddleware } from './src/api/middleware/requestId';
 import { apiRateLimiter } from './src/api/middleware/rateLimiter';
@@ -28,7 +29,7 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3767;
+  const PORT = config.PORT;
 
   // 1. Core Middlewares
   app.use(requestIdMiddleware);
@@ -75,12 +76,15 @@ async function startServer() {
   app.use('/api', chatRoutes); // /chat, /hf/chat
   app.use('/api', modelRoutes); // /models, /hf/models
 
-  // Optional: Legacy HF Inference route if still needed for non-chat blobs
-  app.post('/api/hf/inference', async (req, res, next) => {
-    try {
-      const { InferenceClient } = await import('@huggingface/inference');
-      const { model, inputs, hfApiKey, parameters } = req.body;
-      const key = hfApiKey || process.env.HF_KEY;
+/**
+ * Backward compatibility for legacy Hugging Face inference.
+ * Use /api/chat or WebSocket for modern streaming.
+ */
+app.post('/api/hf/inference', async (req, res, next) => {
+  try {
+    const { InferenceClient } = await import('@huggingface/inference');
+    const { model, inputs, hfApiKey, parameters } = req.body;
+    const key = hfApiKey || config.HF_KEY;
       if (!key) return res.status(400).json({ error: 'HF API Key required' });
       
       const client = new InferenceClient(key);
@@ -99,7 +103,7 @@ async function startServer() {
   });
 
   // 4. Static Serving & Frontend
-  if (process.env.NODE_ENV !== 'production') {
+  if (config.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },

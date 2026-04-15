@@ -1,6 +1,8 @@
-import winston from 'winston';
-import { getNamespace } from 'cls-hooked';
-
+/**
+ * Centralized logging module using Winston.
+ * Supports request correlation via CLS (Continuation Local Storage)
+ * and structured multi-transport logging (Console + File).
+ */
 const namespace = 'app-request';
 
 const logFormat = winston.format.combine(
@@ -24,6 +26,10 @@ const transports = [
   new winston.transports.File({ filename: 'logs/all.log' }),
 ];
 
+/**
+ * Winston Logger instance with custom formatting and transports.
+ * Automatically injects requestId from the current request context if available.
+ */
 export const Logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   levels: winston.config.npm.levels,
@@ -31,7 +37,9 @@ export const Logger = winston.createLogger({
   transports,
 });
 
-// Middleware for morgan to use winston
+/**
+ * Log stream adapter for Morgan middleware integration.
+ */
 export const logStream = {
   write: (message: string) => Logger.info(message.trim()),
 };
