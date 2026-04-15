@@ -1,3 +1,7 @@
+import winston from 'winston';
+import { getNamespace } from 'cls-hooked';
+import { config } from '../config/env';
+
 /**
  * Centralized logging module using Winston.
  * Supports request correlation via CLS (Continuation Local Storage)
@@ -31,7 +35,7 @@ const transports = [
  * Automatically injects requestId from the current request context if available.
  */
 export const Logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: config.LOG_LEVEL,
   levels: winston.config.npm.levels,
   format: logFormat,
   transports,

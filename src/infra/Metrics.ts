@@ -1,3 +1,5 @@
+import promClient from 'prom-client';
+
 /**
  * Prometheus metrics registry for the Model Tester Tool.
  * Exposes core performance indicators for chat throughput, provider latency, 
