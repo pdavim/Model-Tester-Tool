@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { 
   Paperclip, 
   Send, 
@@ -7,7 +7,7 @@ import {
   VideoIcon, 
   FileIcon, 
   X, 
-  ShieldCheck,
+  Square,
   Command,
   CornerDownLeft
 } from 'lucide-react';
@@ -33,6 +33,7 @@ export const ChatInput: React.FC = () => {
   } = useChatStore();
   
   const { openRouterKey, hfApiKey } = useConfigStore();
+  const abortControllerRef = useRef<AbortController | null>(null);
   
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -50,7 +51,16 @@ export const ChatInput: React.FC = () => {
 
   const onSend = async () => {
     if ((!input.trim() && selectedFiles.length === 0) || isLoading || isProcessingFiles) return;
-    await handleSend({ openRouterKey, hfApiKey });
+    
+    abortControllerRef.current = new AbortController();
+    await handleSend({ openRouterKey, hfApiKey }, abortControllerRef.current.signal);
+  };
+
+  const onStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
   };
 
   return (
@@ -118,7 +128,7 @@ export const ChatInput: React.FC = () => {
                     size="icon" 
                     className="text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl h-11 w-11 transition-all"
                     onClick={() => document.getElementById('file-upload')?.click()}
-                    disabled={isProcessingFiles}
+                    disabled={isProcessingFiles || isLoading}
                   >
                     {isProcessingFiles ? <RefreshCw className="w-5 h-5 animate-spin text-orange-500" /> : <Paperclip className="w-5 h-5" />}
                   </Button>
@@ -146,16 +156,24 @@ export const ChatInput: React.FC = () => {
                 <Command className="w-3 h-3" />
                 <CornerDownLeft className="w-3 h-3" />
              </div>
-             <Button 
-                onClick={onSend}
-                disabled={(!input.trim() && selectedFiles.length === 0) || isLoading || isProcessingFiles}
-                className={cn(
-                  "h-12 w-12 rounded-2xl transition-all duration-300 shadow-lg",
-                  isLoading ? "bg-orange-100 text-orange-500" : "bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20 hover:scale-110"
-                )}
-              >
-                {isLoading ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6 fill-current" />}
-              </Button>
+             {isLoading ? (
+               <Button 
+                 onClick={onStop}
+                 className="h-12 w-12 rounded-2xl bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20 transition-all hover:scale-110"
+               >
+                 <Square className="w-5 h-5 fill-current" />
+               </Button>
+             ) : (
+               <Button 
+                  onClick={onSend}
+                  disabled={(!input.trim() && selectedFiles.length === 0) || isProcessingFiles}
+                  className={cn(
+                    "h-12 w-12 rounded-2xl transition-all duration-300 shadow-lg bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20 hover:scale-110"
+                  )}
+                >
+                  <Send className="w-6 h-6 fill-current" />
+                </Button>
+             )}
           </div>
         </div>
       </div>

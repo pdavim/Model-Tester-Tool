@@ -57,6 +57,7 @@ import { useTestStore } from '@/store/useTestStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useModelStore } from '@/store/useModelStore';
 import { ModelSelector } from '@/components/modals/ModelSelector';
+import { ExportService } from '@/utils/export';
 import { BENCHMARK_PROMPTS, BenchmarkPrompt } from '@/utils/benchmark-prompts';
 
 export default function TestBench() {
@@ -98,6 +99,15 @@ export default function TestBench() {
 
   const handleRunSinglePrompt = (prompt: BenchmarkPrompt) => {
     runTestBatch([prompt], { openRouterKey, hfApiKey });
+  };
+
+  const handleExport = () => {
+    if (testResults.length === 0) {
+      toast.error('No results to export');
+      return;
+    }
+    ExportService.exportBenchmarkReport(testResults, battleAnalysis);
+    toast.success('Report exported');
   };
 
   return (
@@ -154,6 +164,15 @@ export default function TestBench() {
               className="text-gray-400"
             >
               Reset
+            </Button>
+
+            <Button 
+               onClick={handleExport}
+               variant="outline"
+               disabled={isTesting || testResults.length === 0}
+               className="gap-2 border-orange-200 text-orange-600 hover:bg-orange-50"
+            >
+               <Download className="w-4 h-4" /> Export Report
             </Button>
             
             {isTesting ? (

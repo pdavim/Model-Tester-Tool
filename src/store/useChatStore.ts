@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { useConfigStore } from './useConfigStore';
-import { useModelStore } from './useModelStore';
+import { immer } from 'zustand/middleware/immer';
 import { ApiService } from '@/services/api.service';
 import { detectModelService } from '@/lib/model-utils';
 import { toast } from 'sonner';
+import { ChatSession, Message, Attachment } from '@/types';
+import { ENDPOINTS, DEFAULT_PARAMS } from '@/shared/constants';
 
 interface ChatState {
   sessions: ChatSession[];
@@ -16,7 +17,7 @@ interface ChatState {
   comparisonMode: boolean;
   comparisonModels: string[];
   
-  // Default Parameters (used for new sessions)
+  // Default Parameters
   systemPrompt: string;
   temperature: number;
   topP: number;
@@ -32,7 +33,6 @@ interface ChatState {
   setComparisonMode: (val: boolean) => void;
   setComparisonModels: (models: string[]) => void;
   
-  // Parameter actions (update current session)
   setSystemPrompt: (val: string) => void;
   setTemperature: (val: number) => void;
   setTopP: (val: number) => void;
@@ -47,12 +47,12 @@ interface ChatState {
   renameSession: (id: string, name: string) => void;
   clearChat: () => void;
   
-  handleSend: (config: { openRouterKey: string; hfApiKey: string }) => Promise<void>;
+  handleSend: (config: { openRouterKey: string; hfApiKey: string }, abortSignal?: AbortSignal) => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set, get) => ({
+    immer((set, get) => ({
       sessions: [],
       currentSessionId: null,
       input: '',
@@ -63,151 +63,143 @@ export const useChatStore = create<ChatState>()(
       comparisonModels: [],
 
       // Global defaults
-      systemPrompt: 'You are a helpful AI assistant.',
-      temperature: 0.7,
-      topP: 1,
-      maxTokens: 2048,
+      systemPrompt: DEFAULT_PARAMS.SYSTEM_PROMPT,
+      temperature: DEFAULT_PARAMS.TEMPERATURE,
+      topP: DEFAULT_PARAMS.TOP_P,
+      maxTokens: DEFAULT_PARAMS.MAX_TOKENS,
       frequencyPenalty: 0,
       presencePenalty: 0,
 
       setInput: (input) => set({ input }),
       setSelectedFiles: (selectedFiles) => set({ selectedFiles }),
-      removeAttachment: (id) => set((state) => ({ 
-        selectedFiles: state.selectedFiles.filter(f => f.id !== id) 
-      })),
+      removeAttachment: (id) => set((state) => {
+        state.selectedFiles = state.selectedFiles.filter(f => f.id !== id);
+      }),
       setIsProcessingFiles: (isProcessingFiles) => set({ isProcessingFiles }),
       setComparisonMode: (comparisonMode) => set({ comparisonMode }),
       setComparisonModels: (comparisonModels) => set({ comparisonModels }),
       
-      // Update either current session or global defaults
       setSystemPrompt: (systemPrompt) => set((state) => {
         if (state.currentSessionId) {
-          return {
-            sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
-              ...s, parameters: { ...s.parameters, systemPrompt }
-            } : s)
-          };
+          const session = state.sessions.find(s => s.id === state.currentSessionId);
+          if (session) session.parameters.systemPrompt = systemPrompt;
+        } else {
+          state.systemPrompt = systemPrompt;
         }
-        return { systemPrompt };
       }),
       setTemperature: (val) => set((state) => {
-        const temperature = typeof val === 'number' && !isNaN(val) ? val : 0.7;
+        const temp = typeof val === 'number' && !isNaN(val) ? val : DEFAULT_PARAMS.TEMPERATURE;
         if (state.currentSessionId) {
-          return {
-            sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
-              ...s, parameters: { ...s.parameters, temperature }
-            } : s)
-          };
+          const session = state.sessions.find(s => s.id === state.currentSessionId);
+          if (session) session.parameters.temperature = temp;
+        } else {
+          state.temperature = temp;
         }
-        return { temperature };
       }),
       setTopP: (val) => set((state) => {
-        const topP = typeof val === 'number' && !isNaN(val) ? val : 1;
+        const topP = typeof val === 'number' && !isNaN(val) ? val : DEFAULT_PARAMS.TOP_P;
         if (state.currentSessionId) {
-          return {
-            sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
-              ...s, parameters: { ...s.parameters, topP }
-            } : s)
-          };
+          const session = state.sessions.find(s => s.id === state.currentSessionId);
+          if (session) session.parameters.topP = topP;
+        } else {
+          state.topP = topP;
         }
-        return { topP };
       }),
       setMaxTokens: (val) => set((state) => {
-        const maxTokens = typeof val === 'number' && !isNaN(val) ? val : 2048;
+        const max = typeof val === 'number' && !isNaN(val) ? val : DEFAULT_PARAMS.MAX_TOKENS;
         if (state.currentSessionId) {
-          return {
-            sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
-              ...s, parameters: { ...s.parameters, maxTokens }
-            } : s)
-          };
+          const session = state.sessions.find(s => s.id === state.currentSessionId);
+          if (session) session.parameters.maxTokens = max;
+        } else {
+          state.maxTokens = max;
         }
-        return { maxTokens };
       }),
       setFrequencyPenalty: (val) => set((state) => {
-        const frequencyPenalty = typeof val === 'number' && !isNaN(val) ? val : 0;
+        const fp = typeof val === 'number' && !isNaN(val) ? val : 0;
         if (state.currentSessionId) {
-          return {
-            sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
-              ...s, parameters: { ...s.parameters, frequencyPenalty }
-            } : s)
-          };
+          const session = state.sessions.find(s => s.id === state.currentSessionId);
+          if (session) session.parameters.frequencyPenalty = fp;
+        } else {
+          state.frequencyPenalty = fp;
         }
-        return { frequencyPenalty };
       }),
       setPresencePenalty: (val) => set((state) => {
-        const presencePenalty = typeof val === 'number' && !isNaN(val) ? val : 0;
+        const pp = typeof val === 'number' && !isNaN(val) ? val : 0;
         if (state.currentSessionId) {
-          return {
-            sessions: state.sessions.map(s => s.id === state.currentSessionId ? {
-              ...s, parameters: { ...s.parameters, presencePenalty }
-            } : s)
-          };
+          const session = state.sessions.find(s => s.id === state.currentSessionId);
+          if (session) session.parameters.presencePenalty = pp;
+        } else {
+          state.presencePenalty = pp;
         }
-        return { presencePenalty };
       }),
 
       setCurrentSessionId: (currentSessionId) => set({ currentSessionId }),
       
-      setSelectedModelForSession: (sessionId, modelId, service) => set((state) => ({
-        sessions: state.sessions.map(s => s.id === sessionId ? {
-          ...s, parameters: { ...s.parameters, selectedModel: modelId, selectedService: service }
-        } : s)
-      })),
+      setSelectedModelForSession: (sessionId, modelId, service) => set((state) => {
+        const session = state.sessions.find(s => s.id === sessionId);
+        if (session) {
+          session.parameters.selectedModel = modelId;
+          session.parameters.selectedService = service;
+        }
+      }),
 
       createNewSession: () => {
+        const state = get();
         const newSession: ChatSession = {
           id: Math.random().toString(36).substring(7),
           name: 'New Conversation',
           messages: [],
           parameters: {
-            temperature: get().temperature,
-            topP: get().topP,
-            maxTokens: get().maxTokens,
-            frequencyPenalty: get().frequencyPenalty,
-            presencePenalty: get().presencePenalty,
-            systemPrompt: get().systemPrompt,
+            temperature: state.temperature,
+            topP: state.topP,
+            maxTokens: state.maxTokens,
+            frequencyPenalty: state.frequencyPenalty,
+            presencePenalty: state.presencePenalty,
+            systemPrompt: state.systemPrompt,
             selectedModel: '',
             selectedService: 'all'
           },
           createdAt: Date.now()
         };
-        set((state) => ({ 
-          sessions: [newSession, ...state.sessions],
-          currentSessionId: newSession.id 
-        }));
+        set((state) => {
+          state.sessions.unshift(newSession);
+          state.currentSessionId = newSession.id;
+        });
       },
 
       deleteSession: (id) => set((state) => {
         const nextSessions = state.sessions.filter(s => s.id !== id);
-        return { 
-          sessions: nextSessions,
-          currentSessionId: state.currentSessionId === id ? (nextSessions[0]?.id || null) : state.currentSessionId
-        };
+        state.sessions = nextSessions;
+        if (state.currentSessionId === id) {
+          state.currentSessionId = nextSessions[0]?.id || null;
+        }
       }),
 
-      renameSession: (id, name) => set((state) => ({
-        sessions: state.sessions.map(s => s.id === id ? { ...s, name } : s)
-      })),
+      renameSession: (id, name) => set((state) => {
+        const session = state.sessions.find(s => s.id === id);
+        if (session) session.name = name;
+      }),
 
-      clearChat: () => set((state) => ({
-        sessions: state.sessions.map(s => s.id === state.currentSessionId ? { ...s, messages: [] } : s)
-      })),
+      clearChat: () => set((state) => {
+        const session = state.sessions.find(s => s.id === state.currentSessionId);
+        if (session) session.messages = [];
+      }),
 
-      handleSend: async ({ openRouterKey, hfApiKey }) => {
-        const { input, isLoading, currentSessionId, selectedFiles, sessions } = get();
+      handleSend: async ({ openRouterKey, hfApiKey }, abortSignal) => {
+        const { input, isLoading, currentSessionId, selectedFiles, sessions, comparisonMode, comparisonModels } = get();
         if (!input.trim() || isLoading || !currentSessionId) return;
 
-        const currentSession = sessions.find(s => s.id === currentSessionId);
-        if (!currentSession) return;
+        const sessionIndex = sessions.findIndex(s => s.id === currentSessionId);
+        if (sessionIndex === -1) return;
+        const currentSession = sessions[sessionIndex];
 
-        // Ensure we have a model selected
         const activeModelId = currentSession.parameters.selectedModel;
-        if (!activeModelId && !get().comparisonMode) {
+        if (!activeModelId && !comparisonMode) {
           toast.error('Please select a model for this session');
           return;
         }
 
-        // Process attachments
+        // Process attachments into prompt
         let processedContent: any = input;
         let docText = "";
         selectedFiles.forEach(file => {
@@ -230,52 +222,56 @@ export const useChatStore = create<ChatState>()(
         }
 
         const userMessage: Message = { 
+          id: crypto.randomUUID(),
           role: 'user', 
           content: input,
+          processedContent: processedContent,
           attachments: [...selectedFiles] 
         };
 
-        const updatedMessages = [...currentSession.messages, userMessage];
+        const historyForApi = [...currentSession.messages, userMessage];
         
-        set((state) => ({
-          input: '',
-          selectedFiles: [],
-          isLoading: true,
-          sessions: state.sessions.map(s => s.id === currentSessionId ? { ...s, messages: updatedMessages } : s)
-        }));
+        // Optimistic UI update
+        set((state) => {
+          state.input = '';
+          state.selectedFiles = [];
+          state.isLoading = true;
+          const session = state.sessions.find(s => s.id === currentSessionId);
+          if (session) session.messages.push(userMessage);
+        });
 
-        const modelsToTest = get().comparisonMode && get().comparisonModels.length > 0 
-          ? get().comparisonModels 
+        const modelsToTest = comparisonMode && comparisonModels.length > 0 
+          ? comparisonModels 
           : [activeModelId];
 
         for (const modelId of modelsToTest) {
-          if (!modelId) continue;
+          if (!modelId || abortSignal?.aborted) continue;
           
           const startTime = Date.now();
+          const assistantMessageId = crypto.randomUUID();
           const assistantMessage: Message = { 
             role: 'assistant', 
             content: '', 
             modelId, 
-            isLoading: true 
+            isLoading: true,
+            id: assistantMessageId // Ensure unique ID for updates
           };
 
-          set((state) => ({
-            sessions: state.sessions.map(s => s.id === currentSessionId ? { 
-              ...s, 
-              messages: [...s.messages, assistantMessage] 
-            } : s)
-          }));
+          set((state) => {
+            const session = state.sessions.find(s => s.id === currentSessionId);
+            if (session) session.messages.push(assistantMessage);
+          });
 
           try {
-            const { isHF, endpoint } = detectModelService(modelId);
+            const { endpoint } = detectModelService(modelId);
 
             const payload = {
               model: modelId,
               messages: [
                 { role: 'system', content: currentSession.parameters.systemPrompt },
-                ...updatedMessages.map(m => ({ 
+                ...historyForApi.map(m => ({ 
                   role: m.role, 
-                  content: m.role === 'user' && m.content === input ? processedContent : m.content 
+                  content: m.processedContent || m.content
                 }))
               ],
               temperature: currentSession.parameters.temperature,
@@ -286,52 +282,59 @@ export const useChatStore = create<ChatState>()(
               hfApiKey
             };
 
-            await ApiService.sendMessage(payload, endpoint, (chunk, usage) => {
-              set((state) => ({
-                sessions: state.sessions.map(s => s.id === currentSessionId ? {
-                  ...s,
-                  messages: s.messages.map(m => (m.modelId === modelId && m.isLoading) ? {
-                    ...m,
-                    content: m.content + chunk,
-                    usage: usage || m.usage
-                  } : m)
-                } : s)
-              }));
+            await ApiService.sendMessage(payload, endpoint, {
+              signal: abortSignal,
+              onStream: (chunk, usage) => {
+                set((state) => {
+                  const session = state.sessions.find(s => s.id === currentSessionId);
+                  if (session) {
+                    const msg = session.messages.find(m => m.id === assistantMessageId);
+                    if (msg) {
+                      msg.content += chunk;
+                      if (usage) msg.usage = usage;
+                    }
+                  }
+                });
+              }
             });
 
-            set((state) => ({
-              sessions: state.sessions.map(s => s.id === currentSessionId ? {
-                ...s,
-                messages: s.messages.map(m => (m.modelId === modelId && m.isLoading) ? {
-                  ...m,
-                  isLoading: false,
-                  responseTime: Date.now() - startTime
-                } : m)
-              } : s)
-            }));
+            set((state) => {
+              const session = state.sessions.find(s => s.id === currentSessionId);
+              if (session) {
+                const msg = session.messages.find(m => m.id === assistantMessageId);
+                if (msg) {
+                  msg.isLoading = false;
+                  msg.responseTime = Date.now() - startTime;
+                }
+              }
+            });
 
           } catch (error: any) {
-            set((state) => ({
-              sessions: state.sessions.map(s => s.id === currentSessionId ? {
-                ...s,
-                messages: s.messages.map(m => (m.modelId === modelId && m.isLoading) ? {
-                  ...m,
-                  isLoading: false,
-                  content: `Error: ${error.message}`,
-                  error: 'true'
-                } : m)
-              } : s)
-            }));
+            if (error.name === 'AbortError') {
+              Logger.info('Stream aborted by user');
+              return;
+            }
+            set((state) => {
+              const session = state.sessions.find(s => s.id === currentSessionId);
+              if (session) {
+                const msg = session.messages.find(m => m.id === assistantMessageId);
+                if (msg) {
+                  msg.isLoading = false;
+                  msg.content = `Error: ${error.message}`;
+                  msg.error = 'true';
+                }
+              }
+            });
           }
 
-          if (modelsToTest.length > 1) {
+          if (modelsToTest.length > 1 && !abortSignal?.aborted) {
             await new Promise(r => setTimeout(r, 1000));
           }
         }
 
         set({ isLoading: false });
       }
-    }),
+    })),
     {
       name: 'model-tester-chats',
       partialize: (state) => ({ 

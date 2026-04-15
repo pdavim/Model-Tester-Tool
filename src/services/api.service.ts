@@ -1,56 +1,64 @@
-import { Model, Message, Attachment } from '@/types';
+import { Model } from '../types';
+import { ENDPOINTS } from '../shared/constants';
 
 export class ApiService {
-  static async fetchModels(hfApiKey?: string): Promise<Model[]> {
-    const orResponse = await fetch('/api/models');
-    const orData = await orResponse.json();
-    const orModels = (orData.data || []).map((m: any) => ({ ...m, provider: 'openrouter' }));
-
-    let hfModels: Model[] = [];
-    try {
-      const hfResponse = await fetch('/api/hf/models', {
-        headers: hfApiKey ? { 'x-hf-key': hfApiKey } : {}
-      });
-      if (hfResponse.ok) {
-        hfModels = await hfResponse.json();
-      }
-    } catch (e) {
-      console.error('Error fetching HF models:', e);
+  /**
+   * Fetches models from the consolidated server endpoint.
+   */
+  static async fetchModels(): Promise<Model[]> {
+    const response = await fetch(ENDPOINTS.MODELS);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch models: ${response.statusText}`);
     }
-
-    return [...orModels, ...hfModels];
+    const data = await response.json();
+    return data.data || [];
   }
 
+  /**
+   * Search Hugging Face models via server proxy.
+   */
   static async searchHFHub(query: string, hfApiKey?: string): Promise<Model[]> {
     if (!query.trim() || query.length < 3) return [];
     
-    const response = await fetch(`/api/hf/models?search=${encodeURIComponent(query)}`, {
+    const url = new URL(ENDPOINTS.HF_MODELS, window.location.origin);
+    url.searchParams.append('search', query);
+
+    const response = await fetch(url.toString(), {
       headers: hfApiKey ? { 'x-hf-key': hfApiKey } : {}
     });
-    if (response.ok) {
-      return await response.json();
-    }
-    return [];
+    
+    if (!response.ok) return [];
+    return await response.json();
   }
 
+  /**
+   * Generalized send message handler with streaming support.
+   */
   static async sendMessage(
     payload: any,
     endpoint: string,
-    onStream?: (chunk: string, usage?: any) => void
+    options: {
+      onStream?: (chunk: string, usage?: any) => void;
+      signal?: AbortSignal;
+    } = {}
   ): Promise<any> {
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Request-Id': crypto.randomUUID(), // Client-side correlation
+      },
       body: JSON.stringify(payload),
+      signal: options.signal,
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'API request failed');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
     }
 
     // Handle Streaming
-    if (payload.stream && response.body && onStream) {
+    if (payload.stream && response.body && options.onStream) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       
@@ -67,8 +75,11 @@ export class ApiService {
           try {
             const parsed = JSON.parse(message);
             const content = parsed.choices[0]?.delta?.content || '';
-            onStream(content, parsed.usage);
-          } catch (e) {}
+            options.onStream(content, parsed.usage);
+          } catch (e) {
+            // Log parse errors but don't break the stream
+            console.debug('Failed to parse SSE line:', line);
+          }
         }
       }
       return;

@@ -1,0 +1,56 @@
+# Chart.yaml
+apiVersion: v2
+name: model-tester
+description: A Helm chart for Model Tester Tool
+type: application
+version: 0.1.0
+appVersion: "1.4.0"
+---
+# values.yaml
+replicaCount: 2
+
+image:
+  repository: model-tester
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 3767
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: model-tester.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+config:
+  redisUrl: "redis://redis-master:6379"
+  openrouterKey: ""
+  hfKey: ""
+  appUrl: "http://localhost:3767"

@@ -1,6 +1,8 @@
 export interface Message {
+  id: string; // Standardized ID for state tracking
   role: 'user' | 'assistant' | 'system';
   content: string;
+  processedContent?: any; // For multi-modal or attachment-enriched payloads
   modelId?: string;
   usage?: {
     prompt_tokens: number;

@@ -1,37 +1,88 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/pdavim/Model-Tester-Tool/blob/main/public/model-test-tool-battle.png" />
-</div>
+# 🧠 Model-Tester-Tool v1.4.0-Production
 
-# Run and deploy MODEL TEST TOOL
+[![CI](https://github.com/pdavim/Model-Tester-Tool/actions/workflows/ci.yml/badge.svg)](https://github.com/pdavim/Model-Tester-Tool/actions/workflows/ci.yml)
 
-This contains everything you need to run your app locally.
+An elite, full-stack benchmarking platform designed to test, compare, and audit Large Language Models (LLMs) across multiple providers (OpenRouter, Hugging Face) with a focus on security, performance, and developer experience.
 
-View your app in: https://model-tool.innovaive.com
+## 🚀 Key Features
 
-## Run Locally
+- **⚔️ Model Battles**: Side-by-side comparison of different models with unified parameters.
+- **🔌 Multi-Provider Support**: Seamlessly switch between OpenRouter and Hugging Face adapters.
+- **📡 Resilient Streaming**: High-performance HTTP-SSE streaming with a **WebSocket Fallback Gateway** for restricted networks.
+- **🛡️ Hardened Security**: Strict CSP policies (Helmet), Redis-backed distributed rate-limiting, and sanitized error logging (BYOK safe).
+- **📊 Advanced Analytics**: Automated benchmark report generation (Markdown/JSON) and real-time response metrics.
+- **📎 Multi-Modal Support**: Attachment processing for PDFs (with worker cleanup), images, and markdown.
+- **🌓 Persistence & UX**: Persistent search history (IndexedDB), unified Dark Mode, and session Export/Import.
 
-**Prerequisites:**  Node.js
+## 📡 Architecture & Data Flow
 
+```mermaid
+graph TD
+    Client[React Frontend] -->|BYOK / Session| API[Express API Gateway]
+    API -->|Middleware| RateLimit[Redis Rate Limiter]
+    RateLimit -->|Validated| Auth[Security Manager]
+    Auth -->|HTTP/WS| Gateway[Streaming Gateway]
+    Gateway -->|Adapter| Providers[LLM Provider Factory]
+    Providers -->|OpenRouter| OR[OpenRouter API]
+    Providers -->|HuggingFace| HF[Hugging Face API]
+    OR -->|SSE| Gateway
+    HF -->|Fetch| Gateway
+    Gateway -->|SSE/WebSocket| Client
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 🏗️ Technical Architecture
 
-## Deployment
+### Technical Stack
+- **Frontend**: React 19, Vite 6, Tailwind 4, Framer Motion.
+- **State management**: Zustand 5 + Immer for immutable store updates.
+- **Backend**: Node.js, Express 4, WebSocket (ws).
+- **Infrastructure**: Redis (Rate Limiting/Cache), Prometheus (Metrics), Swagger (Docs).
+- **Validation**: Zod for end-to-end schema safety.
 
-### Using Docker
+## 🛠️ Quick Start
 
-1. Build the image:
-   `docker build -t model-tester -f dockerfile.txt .`
-2. Run the container:
-   `docker run -p 3001:3000 --env-file .env model-tester`
+### Prerequisites
+- **Node.js 20+**
+- **Redis Server** (required for rate-limiting)
 
-### Deploying to Dokploy
+### 1. Installation
+```bash
+npm install
+```
 
-1. Link your repository to Dokploy.
-2. Set the build type to **Docker Compose**.
-3. Point the Dockerfile path to `dockerfile.txt`.
-4. Add your environment variables (`OPENROUTER_API_KEY`, etc.) in the Dokploy dashboard.
-5. Deploy!
+### 2. Configuration
+Copy `env.example.txt` to `.env` and fill in your keys:
+```bash
+cp env.example.txt .env
+```
+
+### 3. Development
+```bash
+npm run dev
+```
+
+## 📜 API Documentation & Monitoring
+
+- **Swagger UI**: Visit `http://localhost:3767/api/docs` for interactive API documentation.
+- **Metrics**: Visit `http://localhost:3767/api/metrics` for Prometheus-formatted performance data.
+- **Health Check**: `http://localhost:3767/api/health`
+
+## 🚢 Production Deployment
+
+### Docker
+```bash
+# Build multi-stage production image
+bash docker build -t model-tester -f dockerfile.txt .
+
+# Run with environment file
+bash docker run -p 3767:3767 --env-file .env model-tester
+```
+
+### Kubernetes (Helm)
+Deployment charts are located in the `helm/` directory.
+```bash
+helm install model-tester ./helm -f ./helm/values.yaml
+```
+
+## 🤝 Contributing
+Refer to the `strategy-06d83884.md` for historical audit information and structural design decisions.

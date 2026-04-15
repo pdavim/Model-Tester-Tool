@@ -20,7 +20,11 @@ import {
   Lock,
   Shield,
   Fingerprint,
-  Activity
+  Activity,
+  Download,
+  Upload,
+  FileJson,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -55,6 +59,7 @@ import { useChatStore } from '@/store/useChatStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useModelStore } from '@/store/useModelStore';
 import { ModelSelector } from '@/components/modals/ModelSelector';
+import { ExportService } from '@/utils/export';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -105,6 +110,10 @@ export const ChatSidebar: React.FC = () => {
 
   const maxTokensLimit = selectedModel?.context_length || 4096;
 
+      toast.success('Preset saved');
+    }
+  };
+
   const handleSavePreset = () => {
     const name = prompt('Enter preset name:');
     if (name) {
@@ -121,6 +130,37 @@ export const ChatSidebar: React.FC = () => {
       });
       toast.success('Preset saved');
     }
+  };
+
+  const handleExport = (type: 'json' | 'md') => {
+    if (!currentSession) {
+      toast.error('No active session to export');
+      return;
+    }
+    if (type === 'json') ExportService.exportSessionJson(currentSession);
+    else ExportService.exportSessionMarkdown(currentSession);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const session = JSON.parse(event.target?.result as string);
+        if (!session.id || !session.messages) throw new Error('Invalid session format');
+        
+        // Add to store (needs a new action in useChatStore if we want to add externally)
+        // For now, let's assume we use the existing createNewSession logic but inject data
+        const { sessions } = useChatStore.getState();
+        useChatStore.setState({ sessions: [session, ...sessions], currentSessionId: session.id });
+        toast.success('Session imported successfully');
+      } catch (err) {
+        toast.error('Failed to import session: Invalid JSON');
+      }
+    };
+    reader.readAsText(file);
   };
 
   return (
@@ -412,10 +452,40 @@ export const ChatSidebar: React.FC = () => {
       </ScrollArea>
 
       {/* Footer Actions */}
-      <div className="p-6 border-t border-gray-50 bg-gray-50/20">
+      <div className="p-6 border-t border-gray-50 bg-gray-50/20 space-y-3">
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="flex-1 h-10 gap-2 rounded-2xl font-black text-[10px] uppercase tracking-widest border-gray-100 bg-white hover:bg-orange-50 hover:text-orange-500 shadow-sm transition-all duration-300"
+              >
+                <Download className="w-3.5 h-3.5" /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40 rounded-xl">
+              <DropdownMenuItem onClick={() => handleExport('json')} className="gap-2 cursor-pointer">
+                <FileJson className="w-4 h-4" /> JSON
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('md')} className="gap-2 cursor-pointer">
+                <FileText className="w-4 h-4" /> Markdown
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button 
+            variant="outline" 
+            className="flex-1 h-10 gap-2 rounded-2xl font-black text-[10px] uppercase tracking-widest border-gray-100 bg-white hover:bg-blue-50 hover:text-blue-500 shadow-sm transition-all duration-300"
+            onClick={() => document.getElementById('import-session')?.click()}
+          >
+            <Upload className="w-3.5 h-3.5" /> Import
+            <input type="file" id="import-session" className="hidden" accept=".json" onChange={handleImport} />
+          </Button>
+        </div>
+
         <Button 
           variant="outline" 
-          className="w-full h-10 gap-3 rounded-2xl font-black text-xs uppercase tracking-widest border-gray-100 bg-white hover:bg-red-50 hover:text-red-500 hover:border-red-100 shadow-sm transition-all duration-300"
+          className="w-full h-10 gap-2 rounded-2xl font-black text-[10px] uppercase tracking-widest border-gray-100 bg-white hover:bg-red-50 hover:text-red-500 hover:border-red-100 shadow-sm transition-all duration-300"
           onClick={clearChat}
         >
           <Trash2 className="w-4 h-4" /> Purge Session

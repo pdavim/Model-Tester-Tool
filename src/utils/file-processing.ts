@@ -4,51 +4,78 @@ import { toast } from 'sonner';
 
 export async function extractTextFromPDF(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  let fullText = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = (textContent.items as any[]).map(item => item.str).join(" ");
-    fullText += pageText + "\n";
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  
+  try {
+    const pdf = await loadingTask.promise;
+    let fullText = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = (textContent.items as any[]).map(item => item.str).join(" ");
+      fullText += pageText + "\n";
+    }
+    return fullText;
+  } finally {
+    // Crucial for stopping memory leaks in worker threads
+    await loadingTask.destroy();
   }
-  return fullText;
 }
 
 export async function captureVideoFrames(file: File, frameCount: number = 3): Promise<string[]> {
-  return new Promise((resolve) => {
+  const videoUrl = URL.createObjectURL(file);
+  
+  return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     const frames: string[] = [];
     
-    video.src = URL.createObjectURL(file);
+    video.src = videoUrl;
     video.muted = true;
-    video.play();
     
+    const cleanup = () => {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      URL.revokeObjectURL(videoUrl);
+    };
+
     video.onloadedmetadata = async () => {
-      const duration = video.duration;
-      for (let i = 0; i < frameCount; i++) {
-        const time = (duration / (frameCount + 1)) * (i + 1);
-        video.currentTime = time;
-        await new Promise(r => {
-          video.onseeked = () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context?.drawImage(video, 0, 0, canvas.width, canvas.height);
-            frames.push(canvas.toDataURL('image/jpeg', 0.8));
-            r(true);
-          };
-        });
+      try {
+        const duration = video.duration;
+        for (let i = 0; i < frameCount; i++) {
+          const time = (duration / (frameCount + 1)) * (i + 1);
+          video.currentTime = time;
+          await new Promise(r => {
+            const onSeeked = () => {
+              video.removeEventListener('seeked', onSeeked);
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+              frames.push(canvas.toDataURL('image/jpeg', 0.8));
+              r(true);
+            };
+            video.addEventListener('seeked', onSeeked);
+          });
+        }
+        cleanup();
+        resolve(frames);
+      } catch (err) {
+        cleanup();
+        reject(err);
       }
-      URL.revokeObjectURL(video.src);
-      resolve(frames);
+    };
+
+    video.onerror = (err) => {
+      cleanup();
+      reject(err);
     };
   });
 }
 
 export async function processFileAttachment(file: File): Promise<Attachment | null> {
-  const id = Math.random().toString(36).substring(7);
+  const id = crypto.randomUUID();
   const url = URL.createObjectURL(file);
   
   try {
@@ -70,11 +97,13 @@ export async function processFileAttachment(file: File): Promise<Attachment | nu
       return { id, name: file.name, type: 'md', url, content };
     } else {
       toast.error(`Unsupported file type: ${file.name}`);
+      URL.revokeObjectURL(url);
       return null;
     }
   } catch (err) {
     console.error(`Error processing ${file.name}:`, err);
     toast.error(`Failed to process ${file.name}`);
+    URL.revokeObjectURL(url);
     return null;
   }
 }

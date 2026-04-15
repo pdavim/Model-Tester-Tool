@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { Model } from '@/types';
 import { ApiService } from '@/services/api.service';
 import { useConfigStore } from './useConfigStore';
+import { PROVIDERS } from '@/shared/constants';
 
 interface ModelState {
   models: Model[];
@@ -48,7 +50,7 @@ interface ModelState {
 
 export const useModelStore = create<ModelState>()(
   persist(
-    (set, get) => ({
+    immer((set, get) => ({
       models: [],
       customModels: [],
       favorites: [],
@@ -73,9 +75,19 @@ export const useModelStore = create<ModelState>()(
       fetchModels: async () => {
         set({ isLoadingModels: true });
         try {
-          const { hfApiKey } = useConfigStore.getState();
-          const models = await ApiService.fetchModels(hfApiKey);
-          set({ models });
+          const fetchedModels = await ApiService.fetchModels();
+          set((state) => {
+            state.models = fetchedModels;
+            
+            // Reconcile favorites: Remove any that don't exist in models or customModels
+            const allModelIds = new Set([
+              ...fetchedModels.map(m => m.id),
+              ...state.customModels.map(m => m.id)
+            ]);
+            state.favorites = state.favorites.filter(id => allModelIds.has(id));
+          });
+        } catch (e) {
+          console.error('Failed to fetch models:', e);
         } finally {
           set({ isLoadingModels: false });
         }
@@ -92,19 +104,25 @@ export const useModelStore = create<ModelState>()(
         }
       },
 
-      addCustomModel: (model) => set((state) => ({ 
-        customModels: [...state.customModels, { ...model, isCustom: true, provider: 'huggingface' }] 
-      })),
+      addCustomModel: (model) => set((state) => {
+        state.customModels.push({ 
+          ...model, 
+          isCustom: true, 
+          provider: PROVIDERS.HUGGINGFACE 
+        });
+      }),
 
-      deleteCustomModel: (id) => set((state) => ({ 
-        customModels: state.customModels.filter(m => m.id !== id) 
-      })),
+      deleteCustomModel: (id) => set((state) => {
+        state.customModels = state.customModels.filter(m => m.id !== id);
+      }),
 
       toggleFavorite: (id) => set((state) => {
-        const isFav = state.favorites.includes(id);
-        return {
-          favorites: isFav ? state.favorites.filter(f => f !== id) : [...state.favorites, id]
-        };
+        const index = state.favorites.indexOf(id);
+        if (index > -1) {
+          state.favorites.splice(index, 1);
+        } else {
+          state.favorites.push(id);
+        }
       }),
 
       setSearchQuery: (searchQuery) => set({ searchQuery }),
@@ -119,17 +137,17 @@ export const useModelStore = create<ModelState>()(
       setSortBy: (sortBy) => set({ sortBy }),
       setSortOrder: (sortOrder) => set({ sortOrder }),
       
-      clearFilters: () => set({
-        searchQuery: '',
-        filterFree: false,
-        filterPaid: false,
-        filterModality: [],
-        filterTags: [],
-        filterProviders: [],
-        filterFavorites: false,
-        filterSelected: false,
+      clearFilters: () => set((state) => {
+        state.searchQuery = '';
+        state.filterFree = false;
+        state.filterPaid = false;
+        state.filterModality = [];
+        state.filterTags = [];
+        state.filterProviders = [];
+        state.filterFavorites = false;
+        state.filterSelected = false;
       })
-    }),
+    })),
     {
       name: 'model-tester-models',
       partialize: (state) => ({ 

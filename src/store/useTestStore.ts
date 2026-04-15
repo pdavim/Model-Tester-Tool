@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { ApiService } from '@/services/api.service';
 import { useConfigStore } from './useConfigStore';
 import { detectModelService } from '@/lib/model-utils';
@@ -14,6 +15,7 @@ export interface CapabilityResult {
   latency: number;
   tokens: number;
   error?: string;
+  id?: string;
 }
 
 export interface TestResult {
@@ -30,8 +32,8 @@ interface TestState {
   testResults: TestResult[];
   isTesting: boolean;
   isAnalyzing: boolean;
-  currentTestIndex: number; // Index of the model being tested
-  currentStepIndex: number; // Index of the capability being tested
+  currentTestIndex: number; 
+  currentStepIndex: number; 
   battleAnalysis: string | null;
   abortController: AbortController | null;
   
@@ -47,7 +49,7 @@ interface TestState {
 
 export const useTestStore = create<TestState>()(
   persist(
-    (set, get) => ({
+    immer((set, get) => ({
       testModels: [],
       testResults: [],
       isTesting: false,
@@ -58,27 +60,35 @@ export const useTestStore = create<TestState>()(
       abortController: null,
 
       addModelToTest: (id) => set((state) => {
-        if (state.testModels.includes(id)) return state;
+        if (state.testModels.includes(id)) return;
         if (state.testModels.length >= 10) {
           toast.error('Maximum 10 models for Battle Mode');
-          return state;
+          return;
         }
-        return { testModels: [...state.testModels, id] };
+        state.testModels.push(id);
       }),
 
-      removeModelFromTest: (id) => set((state) => ({
-        testModels: state.testModels.filter(m => m !== id)
-      })),
+      removeModelFromTest: (id) => set((state) => {
+        state.testModels = state.testModels.filter(m => m !== id);
+      }),
 
       setTestModels: (testModels) => set({ testModels }),
 
-      clearResults: () => set({ testResults: [], battleAnalysis: null, currentTestIndex: -1, currentStepIndex: -1 }),
+      clearResults: () => set((state) => {
+        state.testResults = [];
+        state.battleAnalysis = null;
+        state.currentTestIndex = -1;
+        state.currentStepIndex = -1;
+      }),
 
       stopBattle: () => {
         const { abortController } = get();
         if (abortController) {
           abortController.abort();
-          set({ isTesting: false, abortController: null });
+          set((state) => {
+            state.isTesting = false;
+            state.abortController = null;
+          });
           toast.info('Battle stopped by user');
         }
       },
@@ -89,10 +99,13 @@ export const useTestStore = create<TestState>()(
 
         const controller = new AbortController();
         
-        set({ 
-          isTesting: true, 
-          abortController: controller,
-          testResults: testModels.map(id => ({ 
+        set((state) => {
+          state.isTesting = true;
+          state.abortController = controller;
+          state.battleAnalysis = null;
+          state.currentTestIndex = 0;
+          state.currentStepIndex = 0;
+          state.testResults = testModels.map(id => ({ 
             model: id, 
             status: 'pending',
             overallLatency: 0,
@@ -102,12 +115,10 @@ export const useTestStore = create<TestState>()(
               categoryName: p.category,
               status: 'pending',
               latency: 0,
-              tokens: 0
+              tokens: 0,
+              id: crypto.randomUUID()
             }))
-          })),
-          battleAnalysis: null,
-          currentTestIndex: 0,
-          currentStepIndex: 0
+          }));
         });
 
         try {
@@ -121,14 +132,14 @@ export const useTestStore = create<TestState>()(
               const prompt = prompts[j];
               set({ currentStepIndex: j });
 
-              // Update status to running for this specific capability
-              set((state) => ({
-                testResults: state.testResults.map(r => r.model === modelId ? {
-                  ...r,
-                  status: 'running',
-                  capabilities: r.capabilities.map(c => c.categoryId === prompt.id ? { ...c, status: 'running' } : c)
-                } : r)
-              }));
+              set((state) => {
+                const result = state.testResults.find(r => r.model === modelId);
+                if (result) {
+                  result.status = 'running';
+                  const cap = result.capabilities.find(c => c.categoryId === prompt.id);
+                  if (cap) cap.status = 'running';
+                }
+              });
 
               const startTime = Date.now();
               try {
@@ -143,61 +154,68 @@ export const useTestStore = create<TestState>()(
                   hfApiKey
                 };
 
-                const data = await ApiService.sendMessage(payload, endpoint);
+                const data = await ApiService.sendMessage(payload, endpoint, {
+                  signal: controller.signal
+                });
+                
                 const latency = Date.now() - startTime;
                 const content = data.choices?.[0]?.message?.content || data.generated_text || JSON.stringify(data);
                 const tokens = data.usage?.total_tokens || 0;
 
-                set((state) => ({
-                  testResults: state.testResults.map(r => r.model === modelId ? {
-                    ...r,
-                    overallLatency: r.overallLatency + latency,
-                    overallTokens: r.overallTokens + tokens,
-                    capabilities: r.capabilities.map(c => c.categoryId === prompt.id ? {
-                      ...c,
-                      status: 'completed',
-                      response: content,
-                      latency,
-                      tokens
-                    } : c)
-                  } : r)
-                }));
+                set((state) => {
+                  const result = state.testResults.find(r => r.model === modelId);
+                  if (result) {
+                    result.overallLatency += latency;
+                    result.overallTokens += tokens;
+                    const cap = result.capabilities.find(c => c.categoryId === prompt.id);
+                    if (cap) {
+                      cap.status = 'completed';
+                      cap.response = content;
+                      cap.latency = latency;
+                      cap.tokens = tokens;
+                    }
+                  }
+                });
               } catch (error: any) {
-                console.error(`Capability ${prompt.category} failed for ${modelId}:`, error);
-                set((state) => ({
-                  testResults: state.testResults.map(r => r.model === modelId ? {
-                    ...r,
-                    capabilities: r.capabilities.map(c => c.categoryId === prompt.id ? {
-                      ...c,
-                      status: 'error',
-                      error: error.message,
-                      latency: Date.now() - startTime
-                    } : c)
-                  } : r)
-                }));
+                if (error.name === 'AbortError') throw error;
+                
+                set((state) => {
+                  const result = state.testResults.find(r => r.model === modelId);
+                  if (result) {
+                    const cap = result.capabilities.find(c => c.categoryId === prompt.id);
+                    if (cap) {
+                      cap.status = 'error';
+                      cap.error = error.message;
+                      cap.latency = Date.now() - startTime;
+                    }
+                  }
+                });
               }
 
-              // Mini cooldown between capabilities
-              await new Promise(r => setTimeout(r, 1000));
+              if (i < testModels.length - 1 || j < prompts.length - 1) {
+                await new Promise(r => setTimeout(r, 1000));
+              }
             }
 
-            // Mark model as completed
-            set((state) => ({
-              testResults: state.testResults.map(r => r.model === modelId ? { ...r, status: 'completed' } : r)
-            }));
-
-            // Cooldown between models
-            if (i < testModels.length - 1) {
-              await new Promise(r => setTimeout(r, 2000));
-            }
+            set((state) => {
+              const result = state.testResults.find(r => r.model === modelId);
+              if (result) result.status = 'completed';
+            });
           }
         } catch (err: any) {
-          if (err.message !== 'Aborted') {
+          if (err.name !== 'AbortError' && err.message !== 'Aborted') {
             toast.error('Battle encountered an error: ' + err.message);
           }
         } finally {
-          set({ isTesting: false, abortController: null, currentTestIndex: -1, currentStepIndex: -1 });
-          const hasCompleted = get().testResults.some(r => r.status === 'completed');
+          set((state) => {
+            state.isTesting = false;
+            state.abortController = null;
+            state.currentTestIndex = -1;
+            state.currentStepIndex = -1;
+          });
+          
+          const state = get();
+          const hasCompleted = state.testResults.some(r => r.status === 'completed');
           if (hasCompleted && !controller.signal.aborted) {
             toast.success('Battle finished. Generating AI Report...');
             get().generateAIReport({ hfApiKey });
@@ -235,16 +253,16 @@ FORMAT:
 ## Winner of the Battle
           `;
 
-          const { reportModelId } = useConfigStore.getState();
+          const config = useConfigStore.getState();
           const payload = {
-            model: reportModelId,
+            model: config.reportModelId,
             messages: [{ role: 'user', content: reportPrompt }],
             temperature: 0.3,
             max_tokens: 2500,
             hfApiKey
           };
 
-          const { endpoint } = detectModelService(reportModelId);
+          const { endpoint } = detectModelService(config.reportModelId);
           const data = await ApiService.sendMessage(payload, endpoint);
           const analysis = data.choices?.[0]?.message?.content || data.generated_text || "Analysis generated.";
           set({ battleAnalysis: analysis });
@@ -255,9 +273,9 @@ FORMAT:
           set({ isAnalyzing: false });
         }
       }
-    }),
+    })),
     {
-      name: 'model-tester-battle-v2', // Changed name to reset versioning
+      name: 'model-tester-battle-v2',
       partialize: (state) => ({ testModels: state.testModels }),
     }
   )

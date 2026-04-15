@@ -9,16 +9,33 @@ services:
     environment:
       - NODE_ENV=production
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - HF_KEY=${HF_KEY}
       - APP_URL=${APP_URL}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
     restart: always
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3767/health', (r) => { if (r.statusCode === 200) process.exit(0); else process.exit(1); }).on('error', () => process.exit(1))"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      start_period: 40s
+    networks:
+      - app-network
+
+  redis:
+    image: redis:alpine
+    container_name: model-tester-redis
+    ports:
+      - "6379:6379"
+    restart: always
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  redis_data:
