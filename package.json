@@ -1,9 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "1.4.3",
-
-
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -34,6 +32,8 @@
     "idb-keyval": "^6.2.1",
     "immer": "^10.1.1",
     "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.3",
+    "jwks-rsa": "^4.0.1",
     "lucide-react": "^1.8.0",
     "morgan": "^1.10.0",
     "motion": "^12.23.24",
@@ -54,6 +54,7 @@
     "tw-animate-css": "^1.4.0",
     "uuid": "^10.0.0",
     "winston": "^3.13.0",
+    "winston-daily-rotate-file": "^5.0.0",
     "ws": "^8.18.0",
     "zod": "^3.23.8",
     "zustand": "^5.0.12"
@@ -67,6 +68,7 @@
     "@types/helmet": "^0.0.48",
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.14.0",
+    "@types/supertest": "^7.2.0",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^10.0.0",
@@ -74,6 +76,7 @@
     "@vitest/coverage-v8": "^4.1.4",
     "autoprefixer": "^10.4.21",
     "jsdom": "^28.1.0",
+    "supertest": "^7.2.2",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",

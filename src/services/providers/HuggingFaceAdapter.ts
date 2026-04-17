@@ -4,17 +4,16 @@ import { Logger } from '../../infra/Logging';
 import { PROVIDERS } from '../../shared/constants';
 import { RetryUtility } from '../../utils/RetryUtility';
 import { PromptNormalizer } from '../../utils/PromptNormalizer';
+import { config } from '../../config/env';
 
 export class HuggingFaceAdapter implements IProvider {
   readonly name = PROVIDERS.HUGGINGFACE;
 
-  constructor(private config: { apiKey?: string }) {}
-
   async chat(payload: ChatPayload, options?: { signal?: AbortSignal }): Promise<Response> {
-    const key = payload.hfApiKey || this.config.apiKey || process.env.HF_KEY;
+    const key = config.HF_KEY;
     
     if (!key) {
-      throw new Error('Hugging Face API Key is missing');
+      throw new Error('Hugging Face API Key is missing on server');
     }
 
     // Modern HF Inference Router endpoint

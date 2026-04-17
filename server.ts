@@ -15,6 +15,7 @@ import swaggerUi from 'swagger-ui-express';
 import { config } from './src/config/env';
 import { Logger, logStream } from './src/infra/Logging';
 import { requestIdMiddleware } from './src/api/middleware/requestId';
+import { authenticate } from './src/api/middleware/authMiddleware';
 import { apiRateLimiter } from './src/api/middleware/rateLimiter';
 import { errorHandler } from './src/api/middleware/errorHandler';
 
@@ -47,17 +48,24 @@ async function startServer() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        connectSrc: ["'self'", "https://openrouter.ai", "https://huggingface.co", "https://*.huggingface.co"],
-        imgSrc: ["'self'", "data:", "https:", "blob:"],
+        scriptSrc: ["'self'"], // Removed 'unsafe-inline' and 'unsafe-eval'
+        connectSrc: ["'self'", "https://openrouter.ai", "https://huggingface.co", "https://*.huggingface.co", "wss://*"],
+        imgSrc: ["'self'", "data:", "*.innovaive.com"], // Whitelisted hosts
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         objectSrc: ["'none'"],
+        reportUri: '/api/csp-violation', // Added violation reporting
         upgradeInsecureRequests: [],
       },
     },
     crossOriginEmbedderPolicy: false,
   }));
+
+  // CSP Violation reporting endpoint
+  app.post('/api/csp-violation', (req, res) => {
+    Logger.warn('CSP Violation:', req.body);
+    res.status(204).end();
+  });
 
   // 3. API Routes
   const swaggerOptions = {
@@ -68,6 +76,16 @@ async function startServer() {
         version: '1.4.0',
         description: 'Hardened API for LLM Benchmarking',
       },
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
+        },
+      },
+      security: [{ bearerAuth: [] }],
       servers: [{ url: `http://localhost:${PORT}` }],
     },
     apis: ['./src/api/routes/*.ts', './server.ts'],
@@ -76,20 +94,22 @@ async function startServer() {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(specs));
 
   app.use('/api', metaRoutes); // /health, /metrics
-  app.use('/api', apiRateLimiter); // Apply rate limiting to all below
-  app.use('/api', chatRoutes); // /chat, /hf/chat
-  app.use('/api', modelRoutes); // /models, /hf/models
+  
+  // Protected Routes
+  app.use('/api', authenticate); 
+  app.use('/api', apiRateLimiter); 
+  app.use('/api', chatRoutes); 
+  app.use('/api', modelRoutes); 
 
 /**
- * Backward compatibility for legacy Hugging Face inference.
- * Use /api/chat or WebSocket for modern streaming.
+ * Legacy Hugging Face inference. Sanitized (keys from server only).
  */
 app.post('/api/hf/inference', async (req, res, next) => {
   try {
     const { InferenceClient } = await import('@huggingface/inference');
-    const { model, inputs, hfApiKey, parameters } = req.body;
-    const key = hfApiKey || config.HF_KEY;
-      if (!key) return res.status(400).json({ error: 'HF API Key required' });
+    const { model, inputs, parameters } = req.body;
+    const key = config.HF_KEY;
+      if (!key) return res.status(500).json({ error: 'HF API Key not configured on server' });
       
       const client = new InferenceClient(key);
       const result = await client.request({ model, inputs, parameters });

@@ -4,17 +4,16 @@ import { Logger } from '../../infra/Logging';
 import { PROVIDERS } from '../../shared/constants';
 import { RetryUtility } from '../../utils/RetryUtility';
 import { PromptNormalizer } from '../../utils/PromptNormalizer';
+import { config } from '../../config/env';
 
 export class OpenRouterAdapter implements IProvider {
   readonly name = PROVIDERS.OPENROUTER;
 
-  constructor(private config: { apiKey?: string }) {}
-
   async chat(payload: ChatPayload, options?: { signal?: AbortSignal }): Promise<Response> {
-    const key = payload.openRouterKey || this.config.apiKey || process.env.OPENROUTER_API_KEY;
+    const key = config.OPENROUTER_API_KEY;
     
     if (!key) {
-      throw new Error('OpenRouter API Key is missing');
+      throw new Error('OpenRouter API Key is missing on server');
     }
 
     const isFreeModel = payload.model.includes(':free');

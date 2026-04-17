@@ -1,24 +1,33 @@
-import rateLimit from 'express-rate-limit';
-import { RedisStore } from 'rate-limit-redis';
-import { redis } from '../../lib/redis';
+import { Request, Response, NextFunction } from 'express';
+import { RateLimiterService } from '../../services/RateLimiterService';
 import { Logger } from '../../infra/Logging';
+import { config } from '../../config/env';
 
-export const apiRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  store: new RedisStore({
-    // @ts-expect-error RedisStore type mismatch with ioredis but compatible at runtime
-    sendCommand: (...args: string[]) => redis.call(...args),
-  }),
-  handler: (req, res, next, options) => {
-    Logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
-    res.status(options.statusCode).json({
+/**
+ * Unified rate limiter middleware for Express.
+ * Leverages RateLimiterService for Redis-backed sliding window counting.
+ */
+export const apiRateLimiter = async (req: Request, res: Response, next: NextFunction) => {
+  const identifier = req.ip || 'anonymous';
+  
+  const result = await RateLimiterService.checkLimit(
+    identifier,
+    'http_api',
+    config.RATE_LIMIT_CHAT,
+    Math.ceil(config.RATE_LIMIT_WINDOW_MS / 1000)
+  );
+
+  if (!result.success) {
+    Logger.warn(`HTTP Rate limit exceeded for IP: ${identifier}`);
+    res.setHeader('Retry-After', result.retryAfter.toString());
+    return res.status(429).json({
       error: {
         message: 'Too many requests, please try again later.',
-        retryAfter: Math.ceil(options.windowMs / 1000)
+        retryAfterMs: result.retryAfter * 1000
       }
     });
-  },
-});
+  }
+
+  res.setHeader('X-RateLimit-Remaining', result.remaining.toString());
+  next();
+};

@@ -7,13 +7,9 @@ export class ProviderFactory {
   static getProvider(providerName: string): IProvider {
     switch (providerName.toLowerCase()) {
       case PROVIDERS.OPENROUTER:
-        return new OpenRouterAdapter({
-          apiKey: process.env.OPENROUTER_API_KEY
-        });
+        return new OpenRouterAdapter();
       case PROVIDERS.HUGGINGFACE:
-        return new HuggingFaceAdapter({
-          apiKey: process.env.HF_KEY
-        });
+        return new HuggingFaceAdapter();
       default:
         throw new Error(`Unsupported provider: ${providerName}`);
     }

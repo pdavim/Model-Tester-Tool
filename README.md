@@ -1,4 +1,4 @@
-# 🧠 Model-Tester-Tool v1.4.0-Production
+# 🧠 Model-Tester-Tool v1.5.0-Production
 
 [![CI](https://github.com/pdavim/Model-Tester-Tool/actions/workflows/ci.yml/badge.svg)](https://github.com/pdavim/Model-Tester-Tool/actions/workflows/ci.yml)
 
@@ -29,6 +29,38 @@ graph TD
     HF -->|Fetch| Gateway
     Gateway -->|SSE/WebSocket| Client
 ```
+
+## 🛡️ Security Hardening
+
+The Model-Tester-Tool follows industry-standard security practices:
+
+- **JWT Authentication**: All endpoints require a valid Bearer token.
+- **Unified Rate Limiting**: Distributed Redis-backed sliding window rate limits are enforced across HTTP and WebSocket protocols.
+- **Strict CSP**: Helmet is configured to block unauthorized scripts and restrict image hosts.
+- **Secret Redaction**: Server-side logs automatically redact sensitive patterns.
+- **Audit Logging**: Every request is correlated with a unique Request ID.
+
+### Authentication Config
+Set `JWT_SECRET` in your `.env`. Tokens should be issued with appropriate scopes (e.g., `chat:write`).
+
+### Image Whitelisting
+Configure `ALLOWED_IMAGE_HOSTS` (comma-separated list) to restrict which external domains can be used for multi-modal inputs.
+
+## 🚢 Production Deployment Hardening
+
+### TLS Termination
+Always run this tool behind a reverse proxy (Nginx/HAProxy) or an Ingress Controller that handles TLS termination.
+
+### Helm / Kubernetes Hardening
+Our Helm chart (`deploy/helm/`) enforces:
+- `runAsNonRoot: true`
+- `readOnlyRootFilesystem: true`
+- Restrictive `NetworkPolicy` to allow only Redis and Provider API traffic.
+
+### Resource Limits
+Default production limits:
+- CPU: `500m`
+- Memory: `1Gi`
 
 ## 🏗️ Technical Architecture
 
@@ -85,4 +117,4 @@ helm install model-tester ./helm -f ./helm/values.yaml
 ```
 
 ## 🤝 Contributing
-Refer to the `strategy-06d83884.md` for historical audit information and structural design decisions.
+Refer to `strategy-23831d74-2.md` for the latest security audit and remediation roadmap.

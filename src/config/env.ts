@@ -11,6 +11,10 @@ const envSchema = z.object({
   OPENROUTER_API_KEY: z.string().optional(),
   HF_KEY: z.string().optional(),
   LOG_LEVEL: z.enum(['info', 'debug', 'warn', 'error']).default('info'),
+  JWT_SECRET: z.string().default('super-secret-key-change-in-production'),
+  RATE_LIMIT_CHAT: z.coerce.number().default(100),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
+  ALLOWED_IMAGE_HOSTS: z.string().default('innovaive.com'),
 });
 
 const parsed = envSchema.safeParse(process.env);
