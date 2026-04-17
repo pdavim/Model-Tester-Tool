@@ -15,7 +15,9 @@ export class PromptNormalizer {
     const pickyPatterns = [
       /gemma/i,
       /qwen/i,
-      /deepseek-r1/i, // Some versions are also picky
+      /dolphin/i,
+      /deepseek-r1/i,
+ // Some versions are also picky
       /command-r/i,
     ];
     return pickyPatterns.some(pattern => pattern.test(model));
