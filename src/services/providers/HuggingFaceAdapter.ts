@@ -2,6 +2,8 @@ import { IProvider } from './IProvider';
 import { ChatPayload } from '../../api/validation/chat.schema';
 import { Logger } from '../../infra/Logging';
 import { PROVIDERS } from '../../shared/constants';
+import { RetryUtility } from '../../utils/RetryUtility';
+import { PromptNormalizer } from '../../utils/PromptNormalizer';
 
 export class HuggingFaceAdapter implements IProvider {
   readonly name = PROVIDERS.HUGGINGFACE;
@@ -18,26 +20,36 @@ export class HuggingFaceAdapter implements IProvider {
     // Modern HF Inference Router endpoint
     const url = `https://api-inference.huggingface.co/models/${payload.model}/v1/chat/completions`;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
+    // Normalize messages for picky models like Gemma and Qwen
+    const normalizedMessages = PromptNormalizer.normalize(payload.model, payload.messages);
+
+    const response = await RetryUtility.fetchWithRetry(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: payload.model,
+          messages: normalizedMessages,
+          temperature: payload.temperature,
+          top_p: payload.top_p,
+          max_tokens: payload.max_tokens,
+          stream: payload.stream,
+        }),
+        signal: options?.signal,
       },
-      body: JSON.stringify({
-        model: payload.model,
-        messages: payload.messages,
-        temperature: payload.temperature,
-        top_p: payload.top_p,
-        max_tokens: payload.max_tokens,
-        stream: payload.stream,
-      }),
-      signal: options?.signal,
-    });
+      {
+        maxRetries: 3,
+        // HF sometimes returns 503 when model is loading
+        retryOnStatusCodes: [429, 500, 502, 503, 504],
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      // Sanitize: remove potentially large or sensitive parts of the response
       const sanitizedError = {
         message: errorData.error || 'Unknown Error',
         status: response.status,
@@ -52,7 +64,12 @@ export class HuggingFaceAdapter implements IProvider {
   }
 
   async getModels(): Promise<any[]> {
-    const response = await fetch('https://huggingface.co/api/models?pipeline_tag=text-generation&sort=downloads&direction=-1&limit=50');
+    const response = await RetryUtility.fetchWithRetry(
+      'https://huggingface.co/api/models?pipeline_tag=text-generation&sort=downloads&direction=-1&limit=50',
+      {},
+      { maxRetries: 2 }
+    );
+    
     if (!response.ok) {
       throw new Error(`Failed to fetch Hugging Face models: ${response.status}`);
     }
@@ -64,3 +81,4 @@ export class HuggingFaceAdapter implements IProvider {
     }));
   }
 }
+

@@ -35,9 +35,21 @@ export class ChatService {
         model: payload.model, 
         status: 'error' 
       });
-      Logger.error(`ChatService Error [${provider.name}]: ${error.message}`);
-      throw error;
+      
+      // Determine if it was a rate limit error that reached max retries
+      const isRateLimit = error.message?.includes('429');
+      const errorMessage = isRateLimit 
+        ? `Rate limit exceeded for [${provider.name}] after maximum retries. Please try again later.`
+        : `ChatService Error [${provider.name}]: ${error.message}`;
+
+      Logger.error(errorMessage, { 
+        model: payload.model, 
+        error: error.stack 
+      });
+      
+      throw new Error(errorMessage);
     }
+
   }
 
   /**
