@@ -31,7 +31,11 @@ async function startServer() {
   const app = express();
   const PORT = config.PORT;
 
+  // 0. Global Settings
+  app.set('trust proxy', 1);
+
   // 1. Core Middlewares
+
   app.use(requestIdMiddleware);
   app.use(morgan(':method :url :status :res[content-length] - :response-time ms', { stream: logStream }));
   app.use(express.json({ limit: '50mb' }));

@@ -17,10 +17,13 @@ export class OpenRouterAdapter implements IProvider {
       throw new Error('OpenRouter API Key is missing');
     }
 
+    const isFreeModel = payload.model.includes(':free');
+    
     // Normalize messages for picky models like Gemma and Qwen
     const normalizedMessages = PromptNormalizer.normalize(payload.model, payload.messages);
 
     const response = await RetryUtility.fetchWithRetry(
+
       'https://openrouter.ai/api/v1/chat/completions',
       {
         method: 'POST',
@@ -41,10 +44,12 @@ export class OpenRouterAdapter implements IProvider {
         signal: options?.signal,
       },
       {
-        maxRetries: 3,
-        retryOnStatusCodes: [429, 500, 502, 503, 504],
+        maxRetries: isFreeModel ? 7 : 3,
+        statusSpecificMaxRetries: isFreeModel ? { 429: 8, 500: 3 } : { 429: 5 },
+        retryOnStatusCodes: isFreeModel ? [429, 500, 502, 503, 504] : [429, 500, 502, 503, 504],
       }
     );
+
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

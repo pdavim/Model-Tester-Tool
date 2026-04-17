@@ -10,30 +10,43 @@ export interface RetryOptions {
   maxDelayMs?: number;
   backoffFactor?: number;
   retryOnStatusCodes?: number[];
+  statusSpecificMaxRetries?: Record<number, number>;
 }
 
 const DEFAULT_OPTIONS: Required<RetryOptions> = {
   maxRetries: 3,
   initialDelayMs: 1000,
-  maxDelayMs: 10000,
+  maxDelayMs: 15000,
   backoffFactor: 2,
   retryOnStatusCodes: [429, 500, 502, 503, 504],
+  statusSpecificMaxRetries: {
+    429: 5, // Increase budget for rate limits
+    503: 4, // Often transient (model loading)
+  },
 };
 
 export class RetryUtility {
   /**
-   * Enhanced fetch with retry logic
+   * Enhanced fetch with adaptive retry logic
    */
   static async fetchWithRetry(
     url: string,
     init?: RequestInit,
     options: RetryOptions = {}
   ): Promise<Response> {
-    const opts = { ...DEFAULT_OPTIONS, ...options };
+    const opts = { 
+      ...DEFAULT_OPTIONS, 
+      ...options,
+      statusSpecificMaxRetries: { 
+        ...DEFAULT_OPTIONS.statusSpecificMaxRetries, 
+        ...options.statusSpecificMaxRetries 
+      }
+    };
+    
     let lastError: Error | null = null;
     let attempt = 0;
 
-    while (attempt <= opts.maxRetries) {
+    while (true) {
       try {
         const response = await fetch(url, init);
 
@@ -41,14 +54,12 @@ export class RetryUtility {
           return response;
         }
 
-        // Check if status code is retryable
-        if (opts.retryOnStatusCodes.includes(response.status)) {
-          attempt++;
-          if (attempt > opts.maxRetries) {
-            Logger.warn(`Max retries reached for ${url} (Status: ${response.status})`);
-            return response; // Return the last error response if retries exhausted
-          }
+        const isRetryable = opts.retryOnStatusCodes.includes(response.status);
+        const maxRetries = opts.statusSpecificMaxRetries[response.status] ?? opts.maxRetries;
 
+        if (isRetryable && attempt < maxRetries) {
+          attempt++;
+          
           // Handle Retry-After header
           const retryAfter = response.headers.get('Retry-After');
           let delay = opts.initialDelayMs * Math.pow(opts.backoffFactor, attempt - 1);
@@ -58,7 +69,6 @@ export class RetryUtility {
             if (!isNaN(seconds)) {
               delay = seconds * 1000;
             } else {
-              // It might be a date string
               const retryDate = new Date(retryAfter);
               if (!isNaN(retryDate.getTime())) {
                 delay = Math.max(0, retryDate.getTime() - Date.now());
@@ -66,22 +76,29 @@ export class RetryUtility {
             }
           }
 
-          // Add jitter to avoid thundering herd
-          delay = Math.min(opts.maxDelayMs, delay) + (Math.random() * 200);
+          // More aggressive backoff for repeated 429s if no Retry-After
+          if (response.status === 429 && !retryAfter) {
+            delay = delay * 1.5; 
+          }
 
-          Logger.info(`Retrying request to ${url} (Attempt ${attempt}/${opts.maxRetries}) in ${Math.round(delay)}ms (Status: ${response.status})`);
+          delay = Math.min(opts.maxDelayMs, delay) + (Math.random() * 300);
+
+          Logger.info(`Retrying request to ${url} (Attempt ${attempt}/${maxRetries}) in ${Math.round(delay)}ms (Status: ${response.status})`);
           
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
 
-        return response; // Non-retryable status code
+        if (attempt >= maxRetries) {
+          Logger.warn(`Max retries reached for ${url} (Status: ${response.status})`);
+        }
+        
+        return response;
       } catch (error: any) {
         lastError = error;
         
-        // Network errors are generally retryable
         if (error.name === 'AbortError') {
-          throw error; // Don't retry on manual abort
+          throw error;
         }
 
         attempt++;
@@ -89,13 +106,12 @@ export class RetryUtility {
           throw error;
         }
 
-        const delay = Math.min(opts.maxDelayMs, opts.initialDelayMs * Math.pow(opts.backoffFactor, attempt - 1)) + (Math.random() * 200);
+        const delay = Math.min(opts.maxDelayMs, opts.initialDelayMs * Math.pow(opts.backoffFactor, attempt - 1)) + (Math.random() * 300);
         Logger.warn(`Network error on ${url} (Attempt ${attempt}/${opts.maxRetries}): ${error.message}. Retrying in ${Math.round(delay)}ms`);
         
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-
-    throw lastError || new Error(`Failed to fetch ${url} after ${opts.maxRetries} retries`);
   }
 }
+
