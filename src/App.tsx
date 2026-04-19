@@ -28,6 +28,8 @@ import { ModelSelector } from '@/components/modals/ModelSelector';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { useChatStore } from './store/useChatStore';
 import { useModelStore } from './store/useModelStore';
+import { useAuthStore } from './store/useAuthStore';
+import { UnlockOverlay } from './components/auth/UnlockOverlay';
 import { cn } from '@/lib/utils';
 import TestBench from '@/components/TestBench';
 import { Badge } from '@/components/ui/badge';
@@ -40,16 +42,30 @@ const App: React.FC = () => {
     deleteSession, renameSession, isLoading
   } = useChatStore();
   const { fetchModels } = useModelStore();
+  const { isAuthenticated, token } = useAuthStore();
+
+  console.log('[DEBUG] Auth State:', { isAuthenticated, hasToken: !!token });
 
   const currentSession = sessions.find(s => s.id === currentSessionId);
   const activeModel = currentSession?.parameters.selectedModel;
 
   useEffect(() => {
-    fetchModels();
-    if (sessions.length === 0) {
-      createNewSession();
+    if (isAuthenticated) {
+      fetchModels();
+      if (sessions.length === 0) {
+        createNewSession();
+      }
     }
-  }, []);
+  }, [isAuthenticated]);
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <UnlockOverlay />
+        <Toaster position="top-right" expand={false} richColors />
+      </>
+    );
+  }
 
   return (
     <TooltipProvider>

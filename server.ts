@@ -23,6 +23,7 @@ import { errorHandler } from './src/api/middleware/errorHandler';
 import chatRoutes from './src/api/routes/chat.routes';
 import modelRoutes from './src/api/routes/model.routes';
 import metaRoutes from './src/api/routes/meta.routes';
+import authRoutes from './src/api/routes/auth.routes';
 import { WebSocketGateway } from './src/api/gateways/WebSocketGateway';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,15 +48,18 @@ async function startServer() {
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"], // Removed 'unsafe-inline' and 'unsafe-eval'
-        connectSrc: ["'self'", "https://openrouter.ai", "https://huggingface.co", "https://*.huggingface.co", "wss://*"],
-        imgSrc: ["'self'", "data:", "*.innovaive.com"], // Whitelisted hosts
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        defaultSrc: config.NODE_ENV === 'production' ? ["'self'"] : ["*", "data:", "blob:", "'unsafe-inline'", "'unsafe-eval'"],
+        scriptSrc: config.NODE_ENV === 'production' 
+          ? ["'self'"] 
+          : ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*"],
+        connectSrc: config.NODE_ENV === 'production'
+          ? ["'self'", "https://openrouter.ai", "https://huggingface.co", "https://*.huggingface.co", "wss://*"]
+          : ["*", "ws://*", "wss://*"],
+        imgSrc: ["*", "data:", "blob:"], 
+        styleSrc: ["'self'", "'unsafe-inline'", "*"],
+        fontSrc: ["'self'", "data:", "*"],
         objectSrc: ["'none'"],
-        reportUri: '/api/csp-violation', // Added violation reporting
-        upgradeInsecureRequests: [],
+        upgradeInsecureRequests: config.NODE_ENV === 'production' ? [] : null,
       },
     },
     crossOriginEmbedderPolicy: false,
@@ -94,6 +98,7 @@ async function startServer() {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(specs));
 
   app.use('/api', metaRoutes); // /health, /metrics
+  app.use('/api', authRoutes); // /auth/verify
   
   // Protected Routes
   app.use('/api', authenticate); 

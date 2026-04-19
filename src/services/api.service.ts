@@ -1,12 +1,24 @@
 import { Model } from '../types';
 import { ENDPOINTS } from '../shared/constants';
+import { useAuthStore } from '../store/useAuthStore';
 
 export class ApiService {
   /**
    * Fetches models from the consolidated server endpoint.
    */
   static async fetchModels(): Promise<Model[]> {
-    const response = await fetch(ENDPOINTS.MODELS);
+    const token = useAuthStore.getState().token;
+    const response = await fetch(ENDPOINTS.MODELS, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (response.status === 401) {
+      useAuthStore.getState().logout();
+      throw new Error('Session expired. Please re-authenticate.');
+    }
+
     if (!response.ok) {
       throw new Error(`Failed to fetch models: ${response.statusText}`);
     }
@@ -20,13 +32,22 @@ export class ApiService {
   static async searchHFHub(query: string, hfApiKey?: string): Promise<Model[]> {
     if (!query.trim() || query.length < 3) return [];
     
+    const token = useAuthStore.getState().token;
     const url = new URL(ENDPOINTS.HF_MODELS, window.location.origin);
     url.searchParams.append('search', query);
 
     const response = await fetch(url.toString(), {
-      headers: hfApiKey ? { 'x-hf-key': hfApiKey } : {}
+      headers: {
+        ...(hfApiKey ? { 'x-hf-key': hfApiKey } : {}),
+        'Authorization': `Bearer ${token}`
+      }
     });
     
+    if (response.status === 401) {
+      useAuthStore.getState().logout();
+      return [];
+    }
+
     if (!response.ok) return [];
     return await response.json();
   }
@@ -42,15 +63,22 @@ export class ApiService {
       signal?: AbortSignal;
     } = {}
   ): Promise<any> {
+    const token = useAuthStore.getState().token;
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'X-Request-Id': crypto.randomUUID(), // Client-side correlation
+        'X-Request-Id': crypto.randomUUID(), 
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify(payload),
       signal: options.signal,
     });
+
+    if (response.status === 401) {
+      useAuthStore.getState().logout();
+      throw new Error('Session expired');
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

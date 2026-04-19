@@ -60,7 +60,10 @@ export const SettingsModal: React.FC = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-8 space-y-8 bg-white">
+        <form 
+          onSubmit={(e) => { e.preventDefault(); handleSave(); }}
+          className="p-8 space-y-8 bg-white"
+        >
           {/* API Keys Section */}
           <div className="space-y-6">
             <div className="flex items-center gap-2 mb-2">
@@ -81,6 +84,7 @@ export const SettingsModal: React.FC = () => {
                   value={orKey}
                   onChange={e => setOrKey(e.target.value)}
                   placeholder="sk-or-v1-..."
+                  autoComplete="current-password"
                   className="h-11 rounded-xl border-gray-100 bg-gray-50/50 focus:ring-orange-500/10 transition-all"
                 />
               </div>
@@ -97,6 +101,7 @@ export const SettingsModal: React.FC = () => {
                   value={hfKey}
                   onChange={e => setHfKey(e.target.value)}
                   placeholder="hf_..."
+                  autoComplete="current-password"
                   className="h-11 rounded-xl border-gray-100 bg-gray-50/50 focus:ring-orange-500/10 transition-all"
                 />
               </div>
@@ -129,13 +134,13 @@ export const SettingsModal: React.FC = () => {
           </div>
 
           <Button 
-            onClick={handleSave}
+            type="submit"
             className="w-full h-12 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-bold shadow-xl shadow-gray-200 gap-2 transition-all hover:scale-[1.02] active:scale-95"
           >
             <Save className="w-4 h-4" />
             Commit Configuration
           </Button>
-        </div>
+        </form>
         
         <div className="p-4 bg-gray-50 flex items-center justify-center gap-4 border-t border-gray-100">
           <div className="flex items-center gap-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-widest">
